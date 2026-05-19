@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hub vs CFS Palletization Calculator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div>Calculating...</div>
+
+<div class="shell">
+<aside class="sidebar">
+  <div class="sb-title">Import from PDF</div>
+  <div class="pdf-drop" id="pdfDrop">
+    <p>Click or drop PDF here</p>
+    <small>Invoice / Packing list → auto-fills SKU table</small>
+  </div>
+  <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none"/>
+  <div class="pdf-status" id="pdfStatus"></div>
+
+  <div class="sb-title">Shipment</div>
+  <div class="fg one">
+    <label>Pickup<input id="pickup" value="Bengaluru, India"/></label>
+    <label>Destination<input id="dest" value="IUSR-AWD 3PL, Cowpens SC, US"/></label>
+    <label>Invoice ref<input id="inv" value="KAPINC23"/></label>
+  </div>
+
+  <div class="sb-title">Pallet config <select id="dimUnit" class="unit-toggle"><option value="in">inches</option><option value="cm">cm</option></select></div>
+  <div class="fg one" style="margin-bottom:5px">
+    <label>Pallet mode
+      <select id="palletMode">
+        <option value="separate">Separate SKUs (each SKU → own pallets)</option>
+        <option value="mixed">Mixed SKUs (combine for max utilization)</option>
+      </select>
+    </label>
+  </div>
+  <div class="fg three">
+    <label id="pL_lbl">L (in)<input id="pL" type="number" value="48" min="1" step="0.1"/></label>
+    <label id="pW_lbl">W (in)<input id="pW" type="number" value="40" min="1" step="0.1"/></label>
+    <label id="pH_lbl">H (in)<input id="pH" type="number" value="60" min="1" step="0.1"/></label>
+    <label>Max kg<input id="maxKg" type="number" value="680" min="1"/></label>
+    <label>Tare kg<input id="tare" type="number" value="20" min="0" step="0.5"/></label>
+    <label>Fallback<input id="fallback" type="number" value="60" min="1"/></label>
+  </div>
+  <div class="fg">
+    <label>Vol divisor
+      <select id="divisor">
+        <option value="6000">6000 Air (IATA)</option>
+        <option value="5000">5000 Express</option>
+        <option value="1000">1000 Ocean CBM</option>
+      </select>
+    </label>
+    <label>Display currency
+      <select id="displayCurrency"><option value="INR">INR</option><option value="USD">USD</option></select>
+    </label>
+  </div>
+
+  <div class="sb-title">Air freight rate</div>
+  <div class="fg one">
+    <label id="af_lbl">Air freight (₹/kg chargeable)<input id="airFreight" type="number" value="350" min="0"/></label>
+    <p class="sb-note">Applied to chargeable weight differential. Hub charges cargo+tare (or pallet vol); CFS charges cargo (or box vol).</p>
+  </div>
+
+  <div class="sb-title">Hub palletization costs <select id="hubCurrency" class="unit-toggle"><option value="INR">INR</option><option value="USD">USD</option></select></div>
+  <div class="fg one">
+    <label id="sell_lbl">Forwarder sell rate (₹/kg)<input id="sellPrice" type="number" value="0" min="0" step="0.01"/></label>
+  </div>
+  <div class="fg">
+    <label id="hPack_lbl">Packing (₹/plt)<input id="hPack" type="number" value="1500" min="0"/></label>
+    <label id="hFork_lbl">Forklift (₹/plt)<input id="hFork" type="number" value="500" min="0"/></label>
+    <label id="hIspm_lbl">ISPM-15 (₹/plt)<input id="hIspm" type="number" value="0" min="0" step="50"/></label>
+    <label id="hLtl_lbl">LTL charges - Airport pickup (₹ flat)<input id="hLtl" type="number" value="0" min="0"/></label>
+    <label id="hDocs_lbl">Hub docs (₹ flat)<input id="hDocs" type="number" value="0" min="0"/></label>
+    <label id="hMisc_lbl">Hub misc (₹ flat)<input id="hMisc" type="number" value="0" min="0"/></label>
+  </div>
+
+  <div class="sb-title">CFS + LTL costs <select id="cfsCurrency" class="unit-toggle"><option value="USD">USD</option><option value="INR">INR</option></select></div>
+  <div class="fg">
+    <label id="cRecov_lbl">Recovery/kg<input id="cRecov" type="number" value="0.30" min="0" step="0.01"/></label>
+    <label id="cSort_lbl">Sorting/box<input id="cSort" type="number" value="1" min="0" step="0.01"/></label>
+    <label id="cPall_lbl">Pall./pallet<input id="cPall" type="number" value="30" min="0" step="0.01"/></label>
+    <label id="cLtl_lbl">LTL (flat)<input id="cLtl" type="number" value="0" min="0"/></label>
+    <label id="cDocs_lbl">Docs (flat)<input id="cDocs" type="number" value="10" min="0"/></label>
+    <label id="cMisc_lbl">Misc (flat)<input id="cMisc" type="number" value="10" min="0"/></label>
+  </div>
+
+  <div class="sb-title">Exchange rate & TAT</div>
+  <div class="fg">
+    <label>USD→INR<input id="usdRate" type="number" value="93.88" min="1" step="0.01"/></label>
+  </div>
+  <div class="fg">
+    <label>Hub + LTL TAT (hrs)<input id="hubTat" type="number" value="8" min="0"/></label>
+    <label>CFS + LTL TAT (hrs)<input id="cfsTat" type="number" value="36" min="0"/></label>
+  </div>
+
+  <div class="sb-title">Sensitivity range</div>
+  <div class="fg">
+    <label id="sensMin_lbl">AF min (₹/kg)<input id="sensMin" type="number" value="100" min="0" step="50"/></label>
+    <label id="sensMax_lbl">AF max (₹/kg)<input id="sensMax" type="number" value="700" min="0" step="50"/></label>
+  </div>
+
+  <div class="sb-title">Save / Load</div>
+  <div class="save-row">
+    <input id="saveName" placeholder="Shipment name..." value="KAPINC23"/>
+    <button class="sm" onclick="saveShipment()">Save</button>
+  </div>
+  <div class="saved-list" id="savedList"></div>
+</aside>
+
+<section class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h2 id="titleText">Hub vs CFS Calculator</h2>
+      <span class="badge" id="statusBadge">Enter SKUs</span>
+    </div>
+    <div class="btn-row">
+      <button onclick="addRow()">+ SKU</button>
+      <button onclick="clearRows()">Clear</button>
+      <button class="primary" onclick="runCalculation()">Calculate</button>
+    </div>
+  </div>
+
+  <div class="info-strip" id="infoStrip">
+    <div><span>Exporter</span><b id="infoExporter">Adret Retail Pvt Ltd</b></div>
+    <div><span>Consignee</span><b id="infoConsignee">Kapiva INC / Amazon AWD</b></div>
+    <div><span>Invoice</span><b id="infoInvoice">KAPINC23</b></div>
+    <div><span>Route</span><b id="infoRoute">Bengaluru → Cowpens, SC</b></div>
+    <div><span>Mode</span><b id="infoMode">By Air · DDP</b></div>
+    <div><span>Total boxes</span><b id="infoBoxes">—</b></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>SKU / Product</th><th>HS Code</th><th>Pcs</th><th>Boxes</th>
+        <th>Gross kg/box</th><th id="th_lcm">L cm</th><th id="th_wcm">W cm</th><th id="th_hcm">H cm</th><th></th>
+      </tr></thead>
+      <tbody id="skuBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics" id="metricsSection">
+    <div class="metric"><div class="lbl">Pallets</div><div class="val" id="mPallets">—</div><div class="sub">hit Calculate</div></div>
+    <div class="metric"><div class="lbl">Total boxes</div><div class="val" id="mBoxes">—</div></div>
+    <div class="metric"><div class="lbl">Cargo gross wt</div><div class="val" id="mCargo">—</div></div>
+    <div class="metric"><div class="lbl">Hub chargeable</div><div class="val" id="mHubCharge">—</div><div class="sub" id="mHubChargeNote"></div></div>
+    <div class="metric"><div class="lbl">CFS chargeable</div><div class="val" id="mCfsCharge">—</div><div class="sub" id="mCfsChargeNote"></div></div>
+    <div class="metric"><div class="lbl">AF weight diff</div><div class="val" id="mAfDiff">—</div><div class="sub" id="mAfDiffSub"></div></div>
+  </div>
+
+  <!-- Recommendation -->
+  <div id="recDiv" style="display:none" class="rec"></div>
+
+  <!-- Cost cards -->
+  <div class="cost-sections" id="costSections" style="display:none">
+    <div class="cost-card hub-card">
+      <div class="cost-card-title">Hub palletize + LTL <span class="win-badge hub" id="hubWinBadge" style="display:none">Lower cost</span></div>
+      <div class="cost-total" id="hubTotal">—</div>
+      <div class="bd-section-lbl">Air freight extra (vs bare cargo)</div>
+      <div class="bd-row"><span id="h_af_label">Extra AF</span><b id="h_airfreight">—</b></div>
+      <div class="bd-section-lbl">Palletization (India)</div>
+      <div class="bd-row"><span>Packing charges</span><b id="h_packing">—</b></div>
+      <div class="bd-row"><span>Forklift</span><b id="h_forklift">—</b></div>
+      <div class="bd-row"><span>ISPM-15 pallets</span><b id="h_ispm">—</b></div>
+      <div class="bd-row" id="h_additional_row"><span>Forwarder margin on extra wt</span><b id="h_additional">—</b></div>
+      <div class="bd-divider"></div>
+      <div class="bd-section-lbl">US-side LTL & other</div>
+      <div class="bd-row"><span>LTL carrier</span><b id="h_ltl">—</b></div>
+      <div class="bd-row"><span>Documentation</span><b id="h_docs">—</b></div>
+      <div class="bd-row"><span>Miscellaneous</span><b id="h_misc">—</b></div>
+      <div class="bd-divider"></div>
+      <div class="bd-row"><span>Total (Hub + LTL)</span><b id="h_grand">—</b></div>
+    </div>
+    <div class="cost-card cfs-card">
+      <div class="cost-card-title">CFS palletize + LTL <span class="win-badge cfs" id="cfsWinBadge" style="display:none">Lower cost</span></div>
+      <div class="cost-total" id="cfsTotal">—</div>
+      <div class="bd-section-lbl">Air freight extra (vs bare cargo)</div>
+      <div class="bd-row"><span>Extra AF (box vol weight)</span><b id="c_airfreight">—</b></div>
+      <div class="bd-section-lbl">CFS handling (USD → INR)</div>
+      <div class="bd-row"><span>Recovery (gross kg × rate)</span><b id="c_recov">—</b></div>
+      <div class="bd-row"><span>Handling / sorting (per box)</span><b id="c_sort">—</b></div>
+      <div class="bd-row"><span>Palletization + injection</span><b id="c_pall">—</b></div>
+      <div class="bd-divider"></div>
+      <div class="bd-section-lbl">US-side LTL & other</div>
+      <div class="bd-row"><span>LTL carrier</span><b id="c_ltl">—</b></div>
+      <div class="bd-row"><span>Documentation</span><b id="c_docs">—</b></div>
+      <div class="bd-row"><span>Miscellaneous</span><b id="c_misc">—</b></div>
+      <div class="bd-divider"></div>
+      <div class="bd-row"><span>Total USD (CFS side)</span><b id="c_usd">—</b></div>
+      <div class="bd-row"><span>Total (CFS + LTL)</span><b id="c_grand">—</b></div>
+    </div>
+  </div>
+
+  <!-- AF Analysis -->
+  <div id="afSection" style="display:none">
+    <div class="sh">Air Freight Weight Analysis <span class="sh-badge">Key driver</span></div>
+    <div class="af-grid">
+      <div class="af-card">
+        <h3>Hub scenario — chargeable weight</h3>
+        <div class="af-row"><span>Cargo actual weight</span><b id="af_h_cargo">—</b></div>
+        <div class="af-row"><span>Pallet tare</span><b id="af_h_tare">—</b></div>
+        <div class="af-row"><span>Actual + tare</span><b id="af_h_actual_tare">—</b></div>
+        <div class="af-row"><span>Pallet volumetric weight</span><b id="af_h_vol">—</b></div>
+        <div class="af-row"><span>Hub chargeable (max)</span><b id="af_h_charge">—</b></div>
+        <div class="af-row"><span>Extra weight vs bare cargo</span><b id="af_h_extra" class="red">—</b></div>
+        <div class="af-row"><span>Extra air freight cost</span><b id="af_h_cost" class="red">—</b></div>
+      </div>
+      <div class="af-card">
+        <h3>CFS scenario — chargeable weight</h3>
+        <div class="af-row"><span>Cargo actual weight</span><b id="af_c_cargo">—</b></div>
+        <div class="af-row"><span>Box volumetric weight (sum)</span><b id="af_c_vol">—</b></div>
+        <div class="af-row"><span>CFS chargeable (max)</span><b id="af_c_charge">—</b></div>
+        <div class="af-row"><span>Extra weight vs bare cargo</span><b id="af_c_extra">—</b></div>
+        <div class="af-row"><span>Extra air freight cost</span><b id="af_c_cost">—</b></div>
+        <div class="af-row" style="margin-top:8px"><span>Hub pays more AF by</span><b id="af_diff_wt">—</b></div>
+        <div class="af-row"><span>AF cost advantage (CFS saves)</span><b id="af_diff_cost" class="green">—</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Break-even -->
+  <div id="beSection" style="display:none">
+    <div class="sh">Break-Even Analysis <span class="sh-badge">When does the decision flip?</span></div>
+    <div class="be-section">
+      <div class="be-card">
+        <h3>Break-even air freight rate</h3>
+        <div class="be-rate" id="beRate">—</div>
+        <div class="be-sub" id="beSub">—</div>
+        <div class="be-verdict" id="beVerdict">—</div>
+      </div>
+      <div class="be-card">
+        <h3>Cost delta breakdown</h3>
+        <div class="af-row"><span>Hub fixed costs</span><b id="be_hfixed">—</b></div>
+        <div class="af-row"><span>CFS fixed costs</span><b id="be_cfixed">—</b></div>
+        <div class="af-row"><span>Fixed cost advantage</span><b id="be_fixed_adv">—</b></div>
+        <div class="af-row"><span>Hub extra AF weight</span><b id="be_h_af_wt">—</b></div>
+        <div class="af-row"><span>CFS extra AF weight</span><b id="be_c_af_wt">—</b></div>
+        <div class="af-row"><span>AF weight advantage</span><b id="be_af_adv">—</b></div>
+        <div class="af-row"><span>Current AF rate</span><b id="be_cur_rate">—</b></div>
+        <div class="af-row"><span>AF cost advantage @ current</span><b id="be_af_cost_adv">—</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAT + Weight -->
+  <div class="tat-section" id="tatSection" style="display:none">
+    <div class="tat-card">
+      <h3>TAT comparison</h3>
+      <div class="bar-row">
+        <div class="bar-lbl"><span>Hub + LTL</span><b id="hubTatLbl">—</b></div>
+        <div class="bar-bg"><div class="bar-fill" id="hubTatBar"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-lbl"><span>CFS + LTL</span><b id="cfsTatLbl">—</b></div>
+        <div class="bar-bg"><div class="bar-fill" id="cfsTatBar"></div></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px" id="tatNote"></div>
+    </div>
+    <div class="tat-card">
+      <h3>Weight summary</h3>
+      <div class="af-row"><span>Cargo actual weight</span><b id="w_cargo">—</b></div>
+      <div class="af-row"><span>Pallet tare added (hub)</span><b id="w_tare">—</b></div>
+      <div class="af-row"><span>Hub chargeable weight</span><b id="w_hub_charge">—</b></div>
+      <div class="af-row"><span>Box vol weight (CFS)</span><b id="w_box_vol">—</b></div>
+      <div class="af-row"><span>CFS chargeable weight</span><b id="w_cfs_charge">—</b></div>
+    </div>
+  </div>
+
+  <!-- Per-unit economics -->
+  <div id="perUnitSection" style="display:none">
+    <div class="sh">Per-Unit Economics</div>
+    <div class="pu-grid">
+      <div class="pu-card">
+        <div class="lbl">Cost per box</div>
+        <div class="hub-val" id="pu_hub_box">—</div>
+        <div class="cfs-val" id="pu_cfs_box">—</div>
+        <div class="sub">Hub (blue) vs CFS (amber)</div>
+      </div>
+      <div class="pu-card">
+        <div class="lbl">Cost per kg cargo</div>
+        <div class="hub-val" id="pu_hub_kg">—</div>
+        <div class="cfs-val" id="pu_cfs_kg">—</div>
+        <div class="sub">Incremental cost only</div>
+      </div>
+      <div class="pu-card">
+        <div class="lbl">Cost per pallet</div>
+        <div class="hub-val" id="pu_hub_pallet">—</div>
+        <div class="cfs-val" id="pu_cfs_pallet">—</div>
+        <div class="sub">Total / number of pallets</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sensitivity -->
+  <div id="sensSection" style="display:none">
+    <div class="sh">Sensitivity: Hub vs CFS at Different Air Freight Rates</div>
+    <div class="tbl-wrap">
+      <table class="sens-tbl">
+        <thead><tr>
+          <th>AF Rate</th><th>Hub extra AF</th><th>Hub fixed</th><th>Hub total</th>
+          <th>CFS extra AF</th><th>CFS fixed</th><th>CFS total</th>
+          <th>Saving</th><th>Winner</th>
+        </tr></thead>
+        <tbody id="sensBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Qualitative -->
+  <div id="qualSection" style="display:none">
+    <div class="sh">Qualitative Decision Factors</div>
+    <div class="tbl-wrap">
+      <table class="qual-tbl">
+        <thead><tr><th>Factor</th><th class="hub-col">Hub palletize (India)</th><th class="cfs-col">CFS palletize (US)</th></tr></thead>
+        <tbody>
+          <tr><td>Cargo protection</td><td><span class="check">✓</span> Palletized — boxes secure, less handling</td><td><span class="cross">✗</span> Loose boxes — more damage risk</td></tr>
+          <tr><td>Speed to AWD</td><td><span class="check">✓</span> Direct LTL — no CFS delay</td><td><span class="cross">✗</span> CFS adds 1–3 business days</td></tr>
+          <tr><td>ISPM-15</td><td><span class="cross">✗</span> Wood pallets must be heat-treated</td><td><span class="check">✓</span> No ISPM-15 — pallet sourced in US</td></tr>
+          <tr><td>Quality control</td><td><span class="check">✓</span> You control packing & labelling</td><td><span class="neutral-icon">~</span> CFS controls — quality varies</td></tr>
+          <tr><td>Flexibility</td><td><span class="cross">✗</span> Committed once palletized</td><td><span class="check">✓</span> Can adapt config on arrival</td></tr>
+          <tr><td>AWD compliance</td><td><span class="check">✓</span> Ensure specs before export</td><td><span class="neutral-icon">~</span> CFS must be briefed</td></tr>
+          <tr><td>AF chargeable wt</td><td><span class="cross">✗</span> Higher — tare + pallet vol</td><td><span class="check">✓</span> Lower — no tare, box vol usually smaller</td></tr>
+          <tr><td>Scale efficiency</td><td><span class="check">✓</span> Better for large, consistent shipments</td><td><span class="check">✓</span> Better for small/variable shipments</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Pallet detail -->
+  <div id="palletSection" style="display:none">
+    <div class="sh">Pallet-by-Pallet Detail</div>
+    <div class="tbl-wrap">
+      <table class="ptbl"><thead><tr>
+        <th>Pallet</th><th>Dims (in)</th><th>Boxes</th><th>SKU mix</th><th>Cargo kg</th>
+        <th>+Tare kg</th><th>Total kg</th><th>Total lbs</th><th>Vol kg</th><th>Chargeable kg</th>
+      </tr></thead><tbody id="palletBody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- SKU allocation -->
+  <div id="allocSection" style="display:none">
+    <div class="sh">Per-SKU Allocation</div>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>SKU</th><th>Boxes</th><th>Box vol wt</th><th>Boxes/pallet</th><th>Pallets</th><th>Limit</th><th>Grid × Layers</th>
+      </tr></thead><tbody id="allocBody"></tbody></table>
+    </div>
+  </div>
+</section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<script src="palletizer.js"></script>
+<script src="calculator.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
