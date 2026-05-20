@@ -1,5 +1,6 @@
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
+  color-scheme: light only;
   --blue:#1d4ed8;--blue-bg:#eff6ff;--blue-border:#bfdbfe;
   --amber:#b45309;--amber-bg:#fffbeb;--amber-border:#fde68a;
   --green:#047857;--green-bg:#ecfdf5;--red:#dc2626;--red-bg:#fef2f2;
@@ -8,7 +9,7 @@
   --border:#e2e8f0;--border2:#cbd5e1;
   --radius:8px;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;color:var(--text);min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;color:#0f172a;min-height:100vh}
 .shell{display:grid;grid-template-columns:310px 1fr;max-width:1440px;margin:0 auto;min-height:100vh;border-left:1px solid var(--border);border-right:1px solid var(--border);background:var(--bg)}
 .sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:16px;overflow-y:auto;max-height:100vh;font-size:13px;position:sticky;top:0}
 .main{padding:20px;overflow-y:auto;max-height:100vh}
@@ -183,7 +184,7 @@ td input:focus{outline:none;background:var(--bg2);border-radius:4px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite;margin-right:8px}
 
-/* Responsive */
+/* Responsive — tablet */
 @media(max-width:900px){
   .shell{grid-template-columns:1fr}
   .sidebar{max-height:none;position:static;border-right:none;border-bottom:1px solid var(--border)}
@@ -191,4 +192,26 @@ td input:focus{outline:none;background:var(--bg2);border-radius:4px}
   .cost-sections,.af-grid,.be-section,.tat-section{grid-template-columns:1fr}
   .pu-grid{grid-template-columns:repeat(2,1fr)}
   .info-strip{grid-template-columns:repeat(2,1fr)}
+}
+
+/* Responsive — phone */
+@media(max-width:520px){
+  .sidebar{padding:12px}
+  .main{padding:12px}
+  .fg,.fg.three{grid-template-columns:1fr 1fr}
+  .fg.one{grid-template-columns:1fr}
+  input,select{font-size:14px;padding:7px 10px}
+  .topbar{flex-direction:column;align-items:flex-start;gap:6px}
+  .topbar h2{font-size:14px}
+  .btn-row button{font-size:12px;padding:7px 12px}
+  .metrics{grid-template-columns:1fr 1fr}
+  .metric .val{font-size:15px}
+  .cost-sections,.af-grid,.be-section,.tat-section,.pu-grid{grid-template-columns:1fr}
+  .info-strip{grid-template-columns:1fr 1fr}
+  .cost-total{font-size:20px}
+  table{font-size:10px}
+  th,td{padding:4px 5px}
+  .tbl-wrap{-webkit-overflow-scrolling:touch}
+  .shell{max-height:none}
+  .sidebar,.main{max-height:none;overflow-y:visible}
 }
