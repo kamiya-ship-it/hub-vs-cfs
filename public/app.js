@@ -150,6 +150,7 @@ function addRow() {
 }
 
 function clearRows() {
+  if (rows.length && !confirm(`Clear all ${rows.length} SKU row${rows.length > 1 ? 's' : ''}?`)) return;
   rows = [];
   renderTable();
 }
