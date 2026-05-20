@@ -153,6 +153,14 @@ function clearRows() {
   if (rows.length && !confirm(`Clear all ${rows.length} SKU row${rows.length > 1 ? 's' : ''}?`)) return;
   rows = [];
   renderTable();
+  // Reset metrics
+  ['mPallets','mBoxes','mCargo','mHubCharge','mCfsCharge','mAfDiff'].forEach(id => { $(id).textContent = '—'; });
+  ['mHubChargeNote','mCfsChargeNote','mAfDiffSub'].forEach(id => { $(id).textContent = ''; });
+  // Hide all result sections
+  ['recDiv','costSections','afSection','beSection','tatSection','perUnitSection','sensSection','qualSection','palletSection','allocSection'].forEach(id => {
+    const el = $(id); if (el) el.style.display = 'none';
+  });
+  $('statusBadge').textContent = 'Enter SKUs';
 }
 
 function delRow(id) {
