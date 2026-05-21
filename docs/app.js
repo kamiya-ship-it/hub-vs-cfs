@@ -574,10 +574,11 @@ function extractPdfMeta(tableRows) {
       if (!meta.destination) {
         let zip = '', state = '', country = '';
         for (const t of consigneeLines) {
+          const US_STATES = /^(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)$/;
           // ZIP code (5 digits)
           if (!zip) { const m = t.match(/\b(\d{5})\b/); if (m) zip = m[1]; }
-          // State code (2 capital letters, standalone)
-          if (!state) { const m = t.match(/\b([A-Z]{2})\b/); if (m && !/^(OF|TO|BY|IN|AT|US|CA|OR)$/.test(m[1]) || /^(CA|TX|NY|FL|GA|IL|NJ|WA|AZ|OH|IN|NC|VA|PA|MA|WI|MN|CO|TN|MO|AL|SC|OR|KY|UT|NV|AR|MS|IA|KS|NE|NM|ID|WV|HI|ME|MT|ND|SD|WY|VT|NH|RI|DE|AK)$/.test(m[1])) state = m[1]; }
+          // State code — must match known US state abbreviation
+          if (!state) { const m = t.match(/\b([A-Z]{2})\b/); if (m && US_STATES.test(m[1])) state = m[1]; }
           // Country
           if (!country) { const m = t.match(/\b(United\s*States|USA|U\.S\.A\.?|US)\b/i); if (m) country = 'US'; }
         }
