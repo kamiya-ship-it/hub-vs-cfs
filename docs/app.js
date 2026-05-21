@@ -215,11 +215,20 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+function geoClean(q) {
+  // Strip warehouse/3PL/company prefix — keep last 2-3 geographic parts
+  // e.g. "IUSR-AWD 3PL, Cowpens SC, US" → "Cowpens SC, US"
+  const parts = q.split(',').map(s => s.trim()).filter(Boolean);
+  const geo = parts.filter(p => !/3pl|awd|warehouse|pvt|ltd|inc|corp|llc|fulfil/i.test(p));
+  return (geo.length >= 2 ? geo.slice(-2) : geo).join(', ') || q;
+}
+
 async function geocode(query) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+  const clean = geoClean(query);
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(clean)}&format=json&limit=1`;
   const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
   const data = await res.json();
-  if (!data.length) throw new Error('Not found');
+  if (!data.length) throw new Error('Not found: ' + clean);
   return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
 }
 

@@ -22,9 +22,17 @@
   <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none"/>
   <div class="pdf-status" id="pdfStatus"></div>
 
+  <datalist id="pickupList">
+    <option value="Virgin Atlantic Cargo, Atlanta, GA 30354">AMI — Virgin Atlantic Cargo, Atlanta GA</option>
+    <option value="560 Atlanta South PKWY Suite 600, Atlanta, GA 30349">KW — Atlanta South PKWY, Atlanta GA</option>
+    <option value="World Containers Inc, 55 Johnson Rd, Lawrence, NY 11559">World Container — Lawrence NY</option>
+    <option value="KW International, 25 Continental Dr, Wayne, NJ 07470">KW International — Wayne NJ</option>
+    <option value="KW International, CA 90746">KW International — CA 90746</option>
+  </datalist>
+
   <div class="sb-title">Shipment</div>
   <div class="fg one">
-    <label>Pickup<input id="pickup" value="Bengaluru, India"/></label>
+    <label>Pickup<input id="pickup" list="pickupList" value="Bengaluru, India" placeholder="Type or select CFS location…"/></label>
     <label>Destination<input id="dest" value="IUSR-AWD 3PL, Cowpens SC, US"/></label>
     <label>Invoice ref<input id="inv" value="KAPINC23"/></label>
   </div>
