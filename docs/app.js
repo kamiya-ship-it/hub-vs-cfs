@@ -549,33 +549,43 @@ function extractPdfMeta(tableRows) {
       }
     }
 
-    // Consignee — look for company name OR first non-label text after "consignee"
+    // Consignee (Ship to) — extract both consignee name AND full destination address
     if (/consignee|ship\s*to/i.test(row) && !meta.consignee) {
       const consigneeLines = [];
-      for (let j = i + 1; j < Math.min(i + 8, tableRows.length); j++) {
-        const t = tableRows[j].map(it => it.t).join(' ');
-        if (/pre.?carriage|vessel|port\s*of|marks|s\s*no|hsn|country\s*of/i.test(t)) break;
+      for (let j = i + 1; j < Math.min(i + 10, tableRows.length); j++) {
+        const t = tableRows[j].map(it => it.t).join(' ').trim();
+        if (!t) continue;
+        if (/pre.?carriage|vessel|port\s*of|marks|s\s*no|hsn|country\s*of|invoice\s*no|exporter/i.test(t)) break;
         consigneeLines.push(t);
       }
+
+      // Company name — first line with Inc/LLC/Ltd/Corp/AWD/Amazon
       for (const t of consigneeLines) {
-        const comp = t.match(/([\w\s]+(Private\s*Limited|Pvt\s*Ltd|Inc|Corp|LLC|Ltd)\.?)/i);
+        const comp = t.match(/([\w\s]+(Private\s*Limited|Pvt\s*Ltd|Inc|Corp|LLC|Ltd|AWD|Amazon)[\w\s.]*)/i);
         if (comp) {
           const name = comp[1].trim().replace(/\s+/g, ' ');
           if (name !== meta.exporter) { meta.consignee = name; break; }
-          if (!meta.consignee) meta.consignee = name;
         }
         const co = t.match(/c\/o\s+(.+)/i);
-        if (co) { meta.consignee = (meta.consignee ? meta.consignee + ' ' : '') + co[0].trim(); break; }
+        if (co) { meta.consignee = co[0].trim(); break; }
       }
-      // Extract destination from consignee address
+
+      // Destination — prefer the full address block from consignee (Ship to)
+      // This is the most reliable destination source in packing lists
       if (!meta.destination) {
         const addr = consigneeLines.join(' ');
-        // Look for "City, ST - US" or "STATE - United States" patterns
-        const stateMatch = addr.match(/\b([A-Z]{2})\s*[-–]\s*(United\s*States|US|USA)/i);
-        if (stateMatch) meta.destination = stateMatch[0].trim();
-        else {
-          const countryMatch = addr.match(/United\s*States|USA|U\.?\s*S\.?\s*A|Canada|UK|Germany|Australia/i);
-          if (countryMatch) meta.destination = countryMatch[0];
+        // "City, State Zip, Country" or "City, ST Zip US" patterns
+        const fullAddr = addr.match(/[\w\s]+,\s*[A-Z]{2}\s+\d{5}[\w\s,]*/);
+        if (fullAddr) {
+          meta.destination = fullAddr[0].replace(/\s+/g, ' ').trim();
+        } else {
+          // State + zip + country
+          const stateZip = addr.match(/([A-Z]{2})\s*[-–,]?\s*(\d{5})\s*[,\s]*(US|USA|United\s*States)?/i);
+          if (stateZip) meta.destination = stateZip[0].trim();
+          else {
+            const country = addr.match(/United\s*States|USA|U\.?\s*S\.?\s*A|Canada|UK|Germany|Australia/i);
+            if (country) meta.destination = country[0];
+          }
         }
       }
     }
