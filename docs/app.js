@@ -1,3 +1,9 @@
+// ─── SUPABASE ───
+const SUPA_URL = 'https://ytgjlgyexqadipiblvnk.supabase.co';
+const SUPA_KEY = 'sb_publishable_JIzY13hBRr8WRb58b-WY4Q_rHXegYWp';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+let currentUser = null;
+
 const $ = id => document.getElementById(id);
 const gv = id => parseFloat($(id)?.value) || 0;
 const esc = s => String(s ?? '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -130,7 +136,6 @@ function init() {
   }
   syncDimLabels();
   renderTable();
-  loadShipmentList();
   updateInfoStrip();
 }
 
@@ -839,68 +844,106 @@ function renderResults(d) {
   });
 }
 
-// ─── SAVE / LOAD SHIPMENTS (localStorage) ───
-const LS_KEY = 'hubcfs_shipments';
-
-function lsGetAll() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
+// ─── AUTH ───
+async function doSignIn() {
+  const email = $('authEmail').value.trim();
+  const pw = $('authPassword').value;
+  $('authErr').textContent = ''; $('authErr').className = 'auth-err';
+  if (!email || !pw) { $('authErr').textContent = 'Enter email and password.'; return; }
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  if (error) $('authErr').textContent = error.message;
 }
-function lsSaveAll(arr) {
-  localStorage.setItem(LS_KEY, JSON.stringify(arr));
+
+async function doSignUp() {
+  const email = $('authEmail').value.trim();
+  const pw = $('authPassword').value;
+  $('authErr').textContent = ''; $('authErr').className = 'auth-err';
+  if (!email || !pw) { $('authErr').textContent = 'Enter email and password.'; return; }
+  if (pw.length < 6) { $('authErr').textContent = 'Password must be at least 6 characters.'; return; }
+  const { error } = await sb.auth.signUp({ email, password: pw });
+  if (error) { $('authErr').textContent = error.message; return; }
+  $('authErr').textContent = '✓ Account created! Check your email to confirm, then sign in.';
+  $('authErr').className = 'auth-err ok';
 }
 
-function saveShipment() {
-  const name = $('saveName').value.trim();
-  if (!name) { alert('Enter a name for this shipment.'); return; }
+async function doSignOut() {
+  await sb.auth.signOut();
+}
 
-  const shipment = {
-    id: 's' + Date.now(),
+sb.auth.onAuthStateChange((event, session) => {
+  currentUser = session?.user ?? null;
+  if (currentUser) {
+    $('authOverlay').style.display = 'none';
+    $('userBadge').style.display = 'flex';
+    $('userEmail').textContent = currentUser.email;
+    loadShipmentList();
+  } else {
+    $('authOverlay').style.display = 'flex';
+    $('userBadge').style.display = 'none';
+    $('savedList').innerHTML = '';
+  }
+});
+
+// ─── SAVE / LOAD SHIPMENTS (Supabase) ───
+function buildShipmentPayload(name) {
+  return {
     name,
     invoice: $('inv').value,
-    totBoxes: rows.reduce((s, r) => s + (+r.boxes || 0), 0),
-    createdAt: new Date().toISOString(),
-    skus: rows.map(r => ({ sku: r.sku, hs: r.hs, pcs: r.pcs, boxes: r.boxes, kg: r.kg, lcm: r.lcm, wcm: r.wcm, hcm: r.hcm })),
-    config: {
-      pickup: $('pickup').value, dest: $('dest').value, inv: $('inv').value,
-      pL: gv('pL'), pW: gv('pW'), pH: gv('pH'), maxKg: gv('maxKg'), tare: gv('tare'), fallback: gv('fallback'),
-      divisor: $('divisor').value, displayCurrency: $('displayCurrency').value,
-      dimUnit: getDimUnit(), hubCurrency: getHubCur(), cfsCurrency: getCfsCur(), palletMode: $('palletMode').value,
-      airFreight: gv('airFreight'), sellPrice: gv('sellPrice'),
-      hPack: gv('hPack'), hFork: gv('hFork'), hIspm: gv('hIspm'), hLtl: gv('hLtl'), hDocs: gv('hDocs'), hMisc: gv('hMisc'),
-      cRecov: gv('cRecov'), cSort: gv('cSort'), cPall: gv('cPall'), cLtl: gv('cLtl'), cDocs: gv('cDocs'), cMisc: gv('cMisc'),
-      usdRate: gv('usdRate'), hubTat: gv('hubTat'), cfsTat: gv('cfsTat'), sensMin: gv('sensMin'), sensMax: gv('sensMax'),
-    },
+    tot_boxes: rows.reduce((s, r) => s + (+r.boxes || 0), 0),
+    data: {
+      skus: rows.map(r => ({ sku: r.sku, hs: r.hs, pcs: r.pcs, boxes: r.boxes, kg: r.kg, lcm: r.lcm, wcm: r.wcm, hcm: r.hcm })),
+      config: {
+        pickup: $('pickup').value, dest: $('dest').value, inv: $('inv').value,
+        pL: gv('pL'), pW: gv('pW'), pH: gv('pH'), maxKg: gv('maxKg'), tare: gv('tare'), fallback: gv('fallback'),
+        divisor: $('divisor').value, displayCurrency: $('displayCurrency').value,
+        dimUnit: getDimUnit(), hubCurrency: getHubCur(), cfsCurrency: getCfsCur(), palletMode: $('palletMode').value,
+        airFreight: gv('airFreight'), sellPrice: gv('sellPrice'),
+        hPack: gv('hPack'), hFork: gv('hFork'), hIspm: gv('hIspm'), hLtl: gv('hLtl'), hDocs: gv('hDocs'), hMisc: gv('hMisc'),
+        cRecov: gv('cRecov'), cSort: gv('cSort'), cPall: gv('cPall'), cLtl: gv('cLtl'), cDocs: gv('cDocs'), cMisc: gv('cMisc'),
+        usdRate: gv('usdRate'), hubTat: gv('hubTat'), cfsTat: gv('cfsTat'), sensMin: gv('sensMin'), sensMax: gv('sensMax'),
+      }
+    }
   };
+}
 
-  const all = lsGetAll();
-  // Replace if same name exists
-  const idx = all.findIndex(s => s.name === name);
-  if (idx >= 0) all[idx] = shipment; else all.push(shipment);
-  lsSaveAll(all);
+async function saveShipment() {
+  if (!currentUser) return;
+  const name = $('saveName').value.trim();
+  if (!name) { alert('Enter a name for this shipment.'); return; }
+  const payload = buildShipmentPayload(name);
+  // Update if name exists, otherwise insert
+  const { data: existing } = await sb.from('shipments').select('id').eq('name', name).maybeSingle();
+  if (existing) {
+    await sb.from('shipments').update(payload).eq('id', existing.id);
+  } else {
+    await sb.from('shipments').insert(payload);
+  }
   loadShipmentList();
 }
 
-function loadShipmentList() {
-  const all = lsGetAll();
-  $('savedList').innerHTML = all.length
-    ? all.map(s =>
-        `<div class="saved-item" data-id="${s.id}">
-          <span class="name" onclick="loadShipment('${s.id}')">${esc(s.name)} <small style="color:var(--text3)">${s.totBoxes || '?'} boxes</small></span>
+async function loadShipmentList() {
+  if (!currentUser) return;
+  const { data, error } = await sb.from('shipments')
+    .select('id, name, invoice, tot_boxes, created_at')
+    .order('created_at', { ascending: false });
+  if (error) return;
+  $('savedList').innerHTML = data.length
+    ? data.map(s =>
+        `<div class="saved-item">
+          <span class="name" onclick="loadShipment('${s.id}')">${esc(s.name)} <small style="color:#94a3b8">${s.tot_boxes || '?'} boxes</small></span>
           <button class="del" onclick="deleteShipment('${s.id}')">✕</button>
-        </div>`
-      ).join('')
-    : '<div style="font-size:10px;color:var(--text3);padding:4px">No saved shipments</div>';
+        </div>`).join('')
+    : '<div style="font-size:10px;color:#94a3b8;padding:4px">No saved shipments</div>';
 }
 
-function loadShipment(id) {
-  const s = lsGetAll().find(s => s.id === id);
-  if (!s) { alert('Shipment not found.'); return; }
-
-  rows = (s.skus || []).map(d => ({ id: nxt(), ...d }));
+async function loadShipment(id) {
+  const { data: s, error } = await sb.from('shipments').select('*').eq('id', id).single();
+  if (error || !s) { alert('Shipment not found.'); return; }
+  const d = s.data || {};
+  rows = (d.skus || []).map(r => ({ id: nxt(), ...r }));
   renderTable();
-
-  if (s.config) {
-    const c = s.config;
+  if (d.config) {
+    const c = d.config;
     const fields = {
       pickup: c.pickup, dest: c.dest, inv: c.inv,
       pL: c.pL, pW: c.pW, pH: c.pH, maxKg: c.maxKg, tare: c.tare, fallback: c.fallback,
@@ -917,7 +960,6 @@ function loadShipment(id) {
     if (c.cfsCurrency) $('cfsCurrency').value = c.cfsCurrency;
     if (c.palletMode) $('palletMode').value = c.palletMode;
   }
-
   $('saveName').value = s.name || '';
   $('statusBadge').textContent = 'Loaded';
   $('titleText').textContent = s.name || 'Hub vs CFS Calculator';
@@ -925,9 +967,9 @@ function loadShipment(id) {
   autoCalc();
 }
 
-function deleteShipment(id) {
+async function deleteShipment(id) {
   if (!confirm('Delete this saved shipment?')) return;
-  lsSaveAll(lsGetAll().filter(s => s.id !== id));
+  await sb.from('shipments').delete().eq('id', id);
   loadShipmentList();
 }
 
