@@ -158,6 +158,14 @@ function clearRows() {
   if (rows.length && !confirm(`Clear all ${rows.length} SKU row${rows.length > 1 ? 's' : ''}?`)) return;
   rows = [];
   renderTable();
+  // Reset sidebar shipment fields
+  $('pickup').value = ''; $('dest').value = ''; $('inv').value = ''; $('saveName').value = '';
+  // Reset info strip
+  $('infoExporter').textContent = '—'; $('infoConsignee').textContent = '—';
+  $('infoInvoice').textContent = '—'; $('infoRoute').textContent = '—';
+  $('infoMode').textContent = '—'; $('infoBoxes').textContent = '—';
+  $('infoDistance').textContent = '—';
+  $('titleText').textContent = 'Hub vs CFS Calculator';
   // Reset metrics
   ['mPallets','mBoxes','mCargo','mHubCharge','mCfsCharge','mAfDiff'].forEach(id => { $(id).textContent = '—'; });
   ['mHubChargeNote','mCfsChargeNote','mAfDiffSub'].forEach(id => { $(id).textContent = ''; });
