@@ -206,6 +206,44 @@ function updateInfoStrip() {
   $('infoRoute').textContent = `${$('pickup').value || '?'} → ${$('dest').value || '?'}`;
 }
 
+// ─── AIR DISTANCE ───
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function geocode(query) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  const data = await res.json();
+  if (!data.length) throw new Error('Not found');
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+}
+
+let _distTimer = null;
+async function updateDistance() {
+  const pickup = $('pickup').value.trim();
+  const dest = $('dest').value.trim();
+  if (!pickup || !dest) { $('infoDistance').textContent = '—'; return; }
+  $('infoDistance').textContent = '…';
+  try {
+    const [a, b] = await Promise.all([geocode(pickup), geocode(dest)]);
+    const km = Math.round(haversineKm(a.lat, a.lon, b.lat, b.lon));
+    const miles = Math.round(km * 0.621371);
+    $('infoDistance').textContent = `${km.toLocaleString()} km · ${miles.toLocaleString()} mi`;
+  } catch {
+    $('infoDistance').textContent = '—';
+  }
+}
+
+function scheduleDistanceUpdate() {
+  clearTimeout(_distTimer);
+  _distTimer = setTimeout(updateDistance, 800);
+}
+
 // ─── PDF UPLOAD ───
 const drop = $('pdfDrop');
 const fileInput = $('pdfFileInput');
@@ -950,3 +988,7 @@ function attachSidebarListeners() {
 init();
 attachSidebarListeners();
 autoCalc();
+updateDistance();
+
+$('pickup').addEventListener('input', () => { updateInfoStrip(); scheduleDistanceUpdate(); });
+$('dest').addEventListener('input', () => { updateInfoStrip(); scheduleDistanceUpdate(); });
