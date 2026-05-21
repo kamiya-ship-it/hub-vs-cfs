@@ -570,23 +570,19 @@ function extractPdfMeta(tableRows) {
         if (co) { meta.consignee = co[0].trim(); break; }
       }
 
-      // Destination — prefer the full address block from consignee (Ship to)
-      // This is the most reliable destination source in packing lists
+      // Destination — grab zip + state + country from the Ship to address block
       if (!meta.destination) {
-        const addr = consigneeLines.join(' ');
-        // "City, State Zip, Country" or "City, ST Zip US" patterns
-        const fullAddr = addr.match(/[\w\s]+,\s*[A-Z]{2}\s+\d{5}[\w\s,]*/);
-        if (fullAddr) {
-          meta.destination = fullAddr[0].replace(/\s+/g, ' ').trim();
-        } else {
-          // State + zip + country
-          const stateZip = addr.match(/([A-Z]{2})\s*[-–,]?\s*(\d{5})\s*[,\s]*(US|USA|United\s*States)?/i);
-          if (stateZip) meta.destination = stateZip[0].trim();
-          else {
-            const country = addr.match(/United\s*States|USA|U\.?\s*S\.?\s*A|Canada|UK|Germany|Australia/i);
-            if (country) meta.destination = country[0];
-          }
+        let zip = '', state = '', country = '';
+        for (const t of consigneeLines) {
+          // ZIP code (5 digits)
+          if (!zip) { const m = t.match(/\b(\d{5})\b/); if (m) zip = m[1]; }
+          // State code (2 capital letters, standalone)
+          if (!state) { const m = t.match(/\b([A-Z]{2})\b/); if (m && !/^(OF|TO|BY|IN|AT|US|CA|OR)$/.test(m[1]) || /^(CA|TX|NY|FL|GA|IL|NJ|WA|AZ|OH|IN|NC|VA|PA|MA|WI|MN|CO|TN|MO|AL|SC|OR|KY|UT|NV|AR|MS|IA|KS|NE|NM|ID|WV|HI|ME|MT|ND|SD|WY|VT|NH|RI|DE|AK)$/.test(m[1])) state = m[1]; }
+          // Country
+          if (!country) { const m = t.match(/\b(United\s*States|USA|U\.S\.A\.?|US)\b/i); if (m) country = 'US'; }
         }
+        const parts = [zip, state, country].filter(Boolean);
+        if (parts.length) meta.destination = parts.join(', ');
       }
     }
 
