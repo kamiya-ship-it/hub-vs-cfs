@@ -15,6 +15,215 @@ function fc(inr) {
   return $('displayCurrency').value === 'USD' ? fmtUSD(inr / gv('usdRate')) : fmtINR(inr);
 }
 
+// ─── LAST ANALYSIS + ROUTE STATE ───
+let lastAnalysisData = null;
+let selectedRoute = 'hub';
+
+function selectRoute(r) {
+  selectedRoute = r;
+  const hBtn = $('btnSelectHub'), cBtn = $('btnSelectCfs');
+  if (hBtn) { hBtn.classList.toggle('active', r === 'hub'); }
+  if (cBtn) { cBtn.classList.toggle('active', r === 'cfs'); }
+}
+
+function createRecord() {
+  if (!lastAnalysisData) return;
+  const d = lastAnalysisData;
+  const route = selectedRoute;
+  const isHub = route === 'hub';
+  const costs = isHub ? d.hubCosts : d.cfsCosts;
+  const totalINR = isHub ? d.hubCosts.hubTotal : d.cfsCosts.cfsTotal;
+  const usdRate = d.cfsCosts.cfsTotalUSD > 0 ? d.cfsCosts.cfsFixed_inr / d.cfsCosts.cfsTotalUSD : 93.88;
+
+  const exporter   = $('infoExporter')?.textContent || '—';
+  const consignee  = $('infoConsignee')?.textContent || '—';
+  const invoice    = $('infoInvoice')?.textContent || '—';
+  const routeStr   = $('infoRoute')?.textContent || '—';
+  const modeStr    = $('infoMode')?.textContent || '—';
+  const pickup     = $('pickup')?.value || '—';
+  const dest       = $('dest')?.value || '—';
+  const today      = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+  const airFreight = gv('airFreight');
+  const palletDim  = `${gv('pL')}×${gv('pW')}×${gv('pH')} ${getDimUnit()}`;
+  const palletMode = d.palletMode === 'mixed' ? 'Mixed SKUs' : 'Separate SKUs';
+
+  const fINR = v => '₹' + Math.round(v).toLocaleString('en-IN');
+  const fUSD = v => '$' + (+v).toFixed(2);
+  const fKg  = v => (+v).toFixed(2) + ' kg';
+
+  // Build pallet rows
+  const palletRows = d.pallets.map(p => `
+    <tr>
+      <td>Pallet ${p.n}</td>
+      <td>${p.boxes}</td>
+      <td>${p.skuMix}</td>
+      <td>${fKg(p.cargo)}</td>
+      <td>${fKg(p.total)}</td>
+      <td>${p.lbs.toFixed(1)} lbs</td>
+      <td>${fKg(p.charge)}</td>
+    </tr>`).join('');
+
+  // Build SKU rows
+  const skuRows = d.allocation.map(r => `
+    <tr>
+      <td>${r.sku || '—'}</td>
+      <td>${r.boxes}</td>
+      <td>${r.kg} kg/box</td>
+      <td>${r.eff}</td>
+      <td>${r.pallets}</td>
+      <td>${r.gl}</td>
+      <td>${r.reason}</td>
+    </tr>`).join('');
+
+  // Cost breakdown section
+  let costSection = '';
+  if (isHub) {
+    costSection = `
+      <table class="cost-table">
+        <tr><th colspan="2">Hub Palletize + LTL — Cost Breakdown</th></tr>
+        <tr><td>Extra air freight (${d.hubCosts.hubExtraAFwt.toFixed(1)} kg @ ₹${airFreight}/kg)</td><td>${fINR(d.hubCosts.hubExtraAF)}</td></tr>
+        <tr><td>Packing charges</td><td>${fINR(d.hubCosts.hPacking)}</td></tr>
+        <tr><td>Forklift</td><td>${fINR(d.hubCosts.hForklift)}</td></tr>
+        <tr><td>ISPM-15</td><td>${fINR(d.hubCosts.hIspmCost)}</td></tr>
+        ${d.hubCosts.hAdditional > 0 ? `<tr><td>Forwarder margin on extra wt</td><td>${fINR(d.hubCosts.hAdditional)}</td></tr>` : ''}
+        <tr><td>LTL carrier</td><td>${fINR(d.hubCosts.hLtl)}</td></tr>
+        <tr><td>Documentation</td><td>${fINR(d.hubCosts.hDocs)}</td></tr>
+        <tr><td>Miscellaneous</td><td>${fINR(d.hubCosts.hMisc)}</td></tr>
+        <tr class="total-row"><td><strong>Total (Hub + LTL)</strong></td><td><strong>${fINR(totalINR)}</strong></td></tr>
+      </table>`;
+  } else {
+    const r = d.cfsCosts;
+    costSection = `
+      <table class="cost-table">
+        <tr><th colspan="2">CFS Palletize + LTL — Cost Breakdown</th></tr>
+        <tr><td>Extra air freight (${r.cfsExtraAFwt.toFixed(1)} kg @ ₹${airFreight}/kg)</td><td>${fINR(r.cfsExtraAF)}</td></tr>
+        <tr><td>Recovery (${fUSD(r.cR)} → ${fINR(r.cR * usdRate)})</td><td>${fINR(r.cR * usdRate)}</td></tr>
+        <tr><td>Sorting/box (${fUSD(r.cS)} → ${fINR(r.cS * usdRate)})</td><td>${fINR(r.cS * usdRate)}</td></tr>
+        <tr><td>Palletization (${fUSD(r.cP)} → ${fINR(r.cP * usdRate)})</td><td>${fINR(r.cP * usdRate)}</td></tr>
+        <tr><td>LTL carrier (${fUSD(r.cL)})</td><td>${fINR(r.cL * usdRate)}</td></tr>
+        <tr><td>Documentation (${fUSD(r.cD)})</td><td>${fINR(r.cD * usdRate)}</td></tr>
+        <tr><td>Miscellaneous (${fUSD(r.cM)})</td><td>${fINR(r.cM * usdRate)}</td></tr>
+        <tr><td>CFS sub-total (USD)</td><td>${fUSD(r.cfsTotalUSD)}</td></tr>
+        <tr class="total-row"><td><strong>Total (CFS + LTL)</strong></td><td><strong>${fINR(totalINR)}</strong></td></tr>
+      </table>`;
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shipment Record — ${invoice}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#0f172a;background:#fff;padding:24px}
+    h1{font-size:18px;font-weight:700;margin-bottom:4px}
+    .sub{font-size:11px;color:#64748b;margin-bottom:18px}
+    .route-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;margin-bottom:16px}
+    .route-badge.hub{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+    .route-badge.cfs{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0}
+    .info-cell span{display:block;font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+    .info-cell b{font-size:12px;color:#0f172a}
+    .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:16px}
+    .metric{background:#f8fafc;padding:8px;border-radius:6px;border:1px solid #e2e8f0;text-align:center}
+    .metric .lbl{font-size:8px;color:#64748b;text-transform:uppercase;margin-bottom:3px}
+    .metric .val{font-size:14px;font-weight:700;color:#0f172a}
+    .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin:16px 0 6px;padding-bottom:4px;border-bottom:2px solid #e2e8f0}
+    table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:11px}
+    th{background:#f8fafc;padding:6px 8px;text-align:left;font-size:9px;font-weight:600;color:#475569;text-transform:uppercase;border:1px solid #e2e8f0}
+    td{padding:5px 8px;border:1px solid #e2e8f0;vertical-align:middle}
+    tr:nth-child(even) td{background:#fafafa}
+    .total-row td{background:#eff6ff!important;font-weight:600;font-size:12px}
+    .cost-table{max-width:480px}
+    .cost-table th{background:#1d4ed8;color:#fff}
+    .cost-table.cfs th{background:#b45309}
+    .rec-box{padding:10px 14px;border-radius:6px;font-size:13px;font-weight:500;margin-bottom:14px;text-align:center}
+    .rec-box.hub{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+    .rec-box.cfs{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+    .per-unit{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+    .pu-card{padding:8px 12px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc}
+    .pu-card .lbl{font-size:9px;color:#64748b;margin-bottom:4px}
+    .pu-card .val{font-size:14px;font-weight:700;color:${isHub ? '#1d4ed8' : '#b45309'}}
+    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}
+    @media print{body{padding:12px}button{display:none}}
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+    <div>
+      <h1>Shipment Record — ${invoice}</h1>
+      <div class="sub">Generated on ${today} · Air freight @ ₹${airFreight}/kg · Pallets: ${palletDim} · Mode: ${palletMode}</div>
+    </div>
+    <button onclick="window.print()" style="padding:6px 16px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px">🖨 Print / Save PDF</button>
+  </div>
+
+  <div class="route-badge ${route}">Selected route: ${isHub ? '📦 Hub Palletize + LTL' : '🏭 CFS Palletize + LTL'}</div>
+
+  <div class="rec-box ${d.recommendation.winner}">${d.recommendation.text}</div>
+
+  <div class="info-grid">
+    <div class="info-cell"><span>Exporter</span><b>${exporter}</b></div>
+    <div class="info-cell"><span>Consignee</span><b>${consignee}</b></div>
+    <div class="info-cell"><span>Invoice</span><b>${invoice}</b></div>
+    <div class="info-cell"><span>Origin</span><b>${pickup}</b></div>
+    <div class="info-cell"><span>Destination</span><b>${dest}</b></div>
+    <div class="info-cell"><span>Mode</span><b>${modeStr}</b></div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="lbl">Pallets</div><div class="val">${d.summary.totPallets}</div></div>
+    <div class="metric"><div class="lbl">Boxes</div><div class="val">${d.summary.totBoxes}</div></div>
+    <div class="metric"><div class="lbl">Cargo wt</div><div class="val">${fKg(d.summary.totCargo)}</div></div>
+    <div class="metric"><div class="lbl">Hub chargeable</div><div class="val">${fKg(d.weights.hubChargeable)}</div></div>
+    <div class="metric"><div class="lbl">CFS chargeable</div><div class="val">${fKg(d.weights.cfsChargeable)}</div></div>
+    <div class="metric"><div class="lbl">Total cost</div><div class="val" style="color:${isHub?'#1d4ed8':'#b45309'}">${fINR(totalINR)}</div></div>
+  </div>
+
+  <div class="section-title">Cost Breakdown (${isHub ? 'Hub + LTL' : 'CFS + LTL'})</div>
+  ${costSection}
+
+  <div class="section-title">Per-Unit Economics</div>
+  <div class="per-unit">
+    <div class="pu-card"><div class="lbl">Cost per box</div><div class="val">${fINR(isHub ? d.perUnit.hubPerBox : d.perUnit.cfsPerBox)}</div></div>
+    <div class="pu-card"><div class="lbl">Cost per kg cargo</div><div class="val">${fINR(isHub ? d.perUnit.hubPerKg : d.perUnit.cfsPerKg)}</div></div>
+    <div class="pu-card"><div class="lbl">Cost per pallet</div><div class="val">${fINR(isHub ? d.perUnit.hubPerPallet : d.perUnit.cfsPerPallet)}</div></div>
+  </div>
+
+  <div class="section-title">Pallet Detail</div>
+  <table>
+    <thead><tr>
+      <th>Pallet</th><th>Boxes</th><th>SKU Mix</th><th>Cargo wt</th>
+      <th>Total wt (+ tare)</th><th>Total lbs</th><th>Chargeable kg</th>
+    </tr></thead>
+    <tbody>${palletRows}</tbody>
+  </table>
+
+  <div class="section-title">SKU Allocation</div>
+  <table>
+    <thead><tr>
+      <th>SKU / Product</th><th>Boxes</th><th>Gross wt</th><th>Boxes/pallet</th>
+      <th>Pallets</th><th>Grid × Layers</th><th>Limit by</th>
+    </tr></thead>
+    <tbody>${skuRows}</tbody>
+  </table>
+
+  <div class="footer">
+    <span>Hub vs CFS Calculator · ${invoice} · ${today}</span>
+    <span>Route: ${isHub ? 'Hub Palletize + LTL' : 'CFS Palletize + LTL'} · AF ₹${airFreight}/kg</span>
+  </div>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+  } else {
+    alert('Pop-up blocked. Please allow pop-ups for this site to create a record.');
+  }
+}
+
 // ─── UNIT CONVERSION HELPERS ───
 const IN_TO_CM = 2.54;
 const CM_TO_IN = 1 / 2.54;
@@ -170,7 +379,8 @@ function clearRows() {
   ['mPallets','mBoxes','mCargo','mHubCharge','mCfsCharge','mAfDiff'].forEach(id => { $(id).textContent = '—'; });
   ['mHubChargeNote','mCfsChargeNote','mAfDiffSub'].forEach(id => { $(id).textContent = ''; });
   // Hide all result sections
-  ['recDiv','costSections','afSection','beSection','tatSection','perUnitSection','sensSection','qualSection','palletSection','allocSection'].forEach(id => {
+  lastAnalysisData = null;
+  ['recDiv','routeSelectorDiv','costSections','afSection','beSection','tatSection','perUnitSection','sensSection','qualSection','palletSection','allocSection'].forEach(id => {
     const el = $(id); if (el) el.style.display = 'none';
   });
   $('statusBadge').textContent = 'Enter SKUs';
@@ -663,6 +873,7 @@ function runCalculation() {
 }
 
 function renderResults(d) {
+  lastAnalysisData = d;
   const { summary, weights, hubCosts, cfsCosts, breakEven, sensitivity, recommendation, pallets, allocation, perUnit, config } = d;
   const airFreight = gv('airFreight');
   const usdRate = gv('usdRate') || 93.88;
@@ -851,6 +1062,13 @@ function renderResults(d) {
     <td><span class="pill ${r.reason === 'dimension' ? 'pill-d' : r.reason === 'weight' ? 'pill-w' : 'pill-f'}">${r.reason}</span></td>
     <td style="font-size:10px;color:var(--text3)">${r.gl}</td>
   </tr>`).join('');
+
+  // Show route selector and auto-select recommended route
+  const routeSel = $('routeSelectorDiv');
+  if (routeSel) {
+    routeSel.style.display = 'flex';
+    selectRoute(recommendation.winner === 'hub' ? 'hub' : 'cfs');
+  }
 
   // Show all sections
   ['costSections', 'afSection', 'beSection', 'tatSection', 'perUnitSection', 'sensSection', 'qualSection', 'palletSection', 'allocSection'].forEach(id => {

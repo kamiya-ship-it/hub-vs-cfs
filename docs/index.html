@@ -183,6 +183,20 @@
   <!-- Recommendation -->
   <div id="recDiv" style="display:none" class="rec"></div>
 
+  <!-- Route selector + Create Record -->
+  <div id="routeSelectorDiv" style="display:none" class="route-selector-bar">
+    <div class="route-selector-label">Choose route for this shipment:</div>
+    <div class="route-toggle-group">
+      <button id="btnSelectHub" class="route-toggle-btn hub-btn active" onclick="selectRoute('hub')">
+        📦 Hub palletize + LTL
+      </button>
+      <button id="btnSelectCfs" class="route-toggle-btn cfs-btn" onclick="selectRoute('cfs')">
+        🏭 CFS palletize + LTL
+      </button>
+    </div>
+    <button class="primary create-rec-btn" onclick="createRecord()">📄 Create Record</button>
+  </div>
+
   <!-- Cost cards -->
   <div class="cost-sections" id="costSections" style="display:none">
     <div class="cost-card hub-card">

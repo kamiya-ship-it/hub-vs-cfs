@@ -1,0 +1,17 @@
+{
+  "name": "hub-vs-cfs-calculator",
+  "version": "1.0.0",
+  "description": "Hub vs CFS palletization cost calculator for India-to-US air freight",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "pdfjs-dist": "^3.11.174",
+    "uuid": "^11.1.0"
+  }
+}
