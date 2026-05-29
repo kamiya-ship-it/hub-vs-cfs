@@ -1,13 +1,28 @@
 function calcFit(bL, bW, bH, pL, pW, pH) {
   if (!bL || !bW || !bH) return null;
-  const o1 = Math.floor(pL / bL) * Math.floor(pW / bW);
-  const o2 = Math.floor(pL / bW) * Math.floor(pW / bL);
-  const perLayer = Math.max(o1, o2);
-  const grid = o1 >= o2
-    ? `${Math.floor(pL / bL)}×${Math.floor(pW / bW)}`
-    : `${Math.floor(pL / bW)}×${Math.floor(pW / bL)}`;
-  const layers = Math.floor(pH / bH);
-  return { perLayer, grid, layers, maxByDim: perLayer * layers };
+  // Try all 3 orientations (which box dimension stands vertical)
+  // and pick the one that fits the most boxes per pallet.
+  const orientations = [
+    { upH: bH, a: bL, b: bW },  // H vertical (standard upright)
+    { upH: bW, a: bL, b: bH },  // W vertical (box on its side)
+    { upH: bL, a: bW, b: bH },  // L vertical (box standing on end)
+  ];
+  let best = null;
+  for (const { upH, a, b } of orientations) {
+    const layers = Math.floor(pH / upH);
+    if (layers < 1) continue;
+    const o1 = Math.floor(pL / a) * Math.floor(pW / b);
+    const o2 = Math.floor(pL / b) * Math.floor(pW / a);
+    const perLayer = Math.max(o1, o2);
+    const maxByDim = perLayer * layers;
+    const grid = o1 >= o2
+      ? `${Math.floor(pL / a)}×${Math.floor(pW / b)}`
+      : `${Math.floor(pL / b)}×${Math.floor(pW / a)}`;
+    if (!best || maxByDim > best.maxByDim) {
+      best = { perLayer, grid, layers, maxByDim, hcm: upH };
+    }
+  }
+  return best;
 }
 
 function allocateSkus(skus, pLcm, pWcm, pHcm, maxKg, fallback, divisor) {
@@ -21,7 +36,11 @@ function allocateSkus(skus, pLcm, pWcm, pHcm, maxKg, fallback, divisor) {
     const gl = fit ? `${fit.grid} × ${fit.layers}L` : '—';
     const boxVolPerUnit = (r.lcm * r.wcm * r.hcm) / divisor;
     const skuBoxVolWt = r.boxes * boxVolPerUnit;
-    return { ...r, fit, eff, pallets, reason, gl, boxVolPerUnit, skuBoxVolWt };
+    // Use the best-orientation's box height for stacking height calculations
+    const effectiveHcm = fit ? fit.hcm : r.hcm;
+    // dimMax = pure dimension limit (weight-independent); used for shared-space tracking
+    const dimMax = fit ? fit.maxByDim : fallback;
+    return { ...r, fit, eff, pallets, reason, gl, boxVolPerUnit, skuBoxVolWt, effectiveHcm, dimMax };
   });
 }
 
@@ -32,7 +51,10 @@ function makeItems(alloc) {
     let rem = r.boxes;
     while (rem > 0) {
       const n = Math.min(rem, r.eff);
-      items.push({ sku: r.sku, n, cargo: n * r.kg, eff: r.eff, perLayer, hcm: r.hcm });
+      // effectiveHcm = box height in the chosen best orientation
+      // dimMax = pure dimensional box limit per pallet (ignores weight)
+      items.push({ sku: r.sku, n, cargo: n * r.kg, eff: r.eff, perLayer,
+                   hcm: r.effectiveHcm || r.hcm, dimMax: r.dimMax || r.eff });
       rem -= n;
     }
   });
@@ -40,8 +62,11 @@ function makeItems(alloc) {
 }
 
 function newPallet(item) {
+  // space tracks fraction of DIMENSIONAL capacity used (not weight-limited eff)
+  // so mixed-weight SKUs with the same box size share the pallet fairly
   return {
-    boxes: item.n, cargo: item.cargo, space: item.n / item.eff,
+    boxes: item.n, cargo: item.cargo,
+    space: item.n / (item.dimMax || item.eff),
     skuMap: { [item.sku]: item.n },
     dims: [{ perLayer: item.perLayer, hcm: item.hcm, n: item.n }],
   };
@@ -50,13 +75,16 @@ function newPallet(item) {
 function addToPallet(p, item) {
   p.boxes += item.n;
   p.cargo += item.cargo;
-  p.space += item.n / item.eff;
+  p.space += item.n / (item.dimMax || item.eff);
   p.skuMap[item.sku] = (p.skuMap[item.sku] || 0) + item.n;
   p.dims.push({ perLayer: item.perLayer, hcm: item.hcm, n: item.n });
 }
 
 function canFit(p, item, maxKg) {
-  return p.cargo + item.cargo <= maxKg && p.space + item.n / item.eff <= 1.001;
+  // Weight check: total cargo ≤ maxKg
+  // Space check: fraction of DIMENSIONAL capacity (dimMax) used ≤ 100%
+  return p.cargo + item.cargo <= maxKg &&
+         p.space + item.n / (item.dimMax || item.eff) <= 1.001;
 }
 
 function computeHeights(pallets, pHcm) {
