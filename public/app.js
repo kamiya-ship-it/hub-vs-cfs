@@ -858,6 +858,7 @@ function runCalculation() {
     hubTat: gv('hubTat'), cfsTat: gv('cfsTat'),
     sensMin: gv('sensMin') * sensToInr, sensMax: gv('sensMax') * sensToInr,
     palletMode: $('palletMode').value,
+    boxRotation: $('boxRotation').value,
   };
 
   $('loadingOverlay').classList.add('show');
@@ -1129,7 +1130,8 @@ function buildShipmentPayload(name) {
         pickup: $('pickup').value, dest: $('dest').value, inv: $('inv').value,
         pL: gv('pL'), pW: gv('pW'), pH: gv('pH'), maxKg: gv('maxKg'), tare: gv('tare'), fallback: gv('fallback'),
         divisor: $('divisor').value, displayCurrency: $('displayCurrency').value,
-        dimUnit: getDimUnit(), hubCurrency: getHubCur(), cfsCurrency: getCfsCur(), palletMode: $('palletMode').value,
+        dimUnit: getDimUnit(), hubCurrency: getHubCur(), cfsCurrency: getCfsCur(),
+        palletMode: $('palletMode').value, boxRotation: $('boxRotation').value,
         airFreight: gv('airFreight'), sellPrice: gv('sellPrice'),
         hPack: gv('hPack'), hFork: gv('hFork'), hIspm: gv('hIspm'), hLtl: gv('hLtl'), hDocs: gv('hDocs'), hMisc: gv('hMisc'),
         cRecov: gv('cRecov'), cSort: gv('cSort'), cPall: gv('cPall'), cLtl: gv('cLtl'), cDocs: gv('cDocs'), cMisc: gv('cMisc'),
@@ -1192,6 +1194,7 @@ async function loadShipment(id) {
     if (c.hubCurrency) $('hubCurrency').value = c.hubCurrency;
     if (c.cfsCurrency) $('cfsCurrency').value = c.cfsCurrency;
     if (c.palletMode) $('palletMode').value = c.palletMode;
+    if (c.boxRotation) $('boxRotation').value = c.boxRotation;
   }
   $('saveName').value = s.name || '';
   $('statusBadge').textContent = 'Loaded';
@@ -1229,7 +1232,7 @@ function attachSidebarListeners() {
     if (el) el.addEventListener('input', autoCalc);
   });
   // selects fire 'change'
-  ['divisor', 'displayCurrency', 'palletMode'].forEach(id => {
+  ['divisor', 'displayCurrency', 'palletMode', 'boxRotation'].forEach(id => {
     const el = $(id);
     if (el) el.addEventListener('change', autoCalc);
   });

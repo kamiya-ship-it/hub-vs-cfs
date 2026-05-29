@@ -113,7 +113,7 @@ function fullAnalysis(input) {
     airFreight, sellPrice,
     hPack, hFork, hIspm, hLtl, hDocs, hMisc,
     cRecov, cSort, cPall, cLtl, cDocs, cMisc, usdRate,
-    hubTat, cfsTat, sensMin, sensMax, palletMode,
+    hubTat, cfsTat, sensMin, sensMax, palletMode, boxRotation,
   } = input;
 
   const mixed = palletMode === 'mixed';
@@ -122,7 +122,7 @@ function fullAnalysis(input) {
   const valid = skus.filter(r => r.boxes > 0 && r.kg > 0);
   if (!valid.length) throw new Error('Add at least one SKU with boxes > 0 and gross kg > 0.');
 
-  const alloc = allocateSkus(valid, pLcm, pWcm, pHcm, maxKg, fallback || 40, divisor || 6000);
+  const alloc = allocateSkus(valid, pLcm, pWcm, pHcm, maxKg, fallback || 40, divisor || 6000, boxRotation || 'auto');
   const totBoxes = alloc.reduce((s, r) => s + r.boxes, 0);
   const totCargo = alloc.reduce((s, r) => s + r.boxes * r.kg, 0);
 

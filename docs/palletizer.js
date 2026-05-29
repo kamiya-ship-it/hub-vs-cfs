@@ -1,33 +1,31 @@
-function calcFit(bL, bW, bH, pL, pW, pH) {
+// rotation: 'auto' (best L×W), 'standard' (as entered), 'rotated' (swap L↔W)
+// H is always vertical — boxes stay upright.
+function calcFit(bL, bW, bH, pL, pW, pH, rotation) {
   if (!bL || !bW || !bH) return null;
-  // Try all 3 orientations (which box dimension stands vertical)
-  // and pick the one that fits the most boxes per pallet.
-  const orientations = [
-    { upH: bH, a: bL, b: bW },  // H vertical (standard upright)
-    { upH: bW, a: bL, b: bH },  // W vertical (box on its side)
-    { upH: bL, a: bW, b: bH },  // L vertical (box standing on end)
-  ];
-  let best = null;
-  for (const { upH, a, b } of orientations) {
-    const layers = Math.floor(pH / upH);
-    if (layers < 1) continue;
-    const o1 = Math.floor(pL / a) * Math.floor(pW / b);
-    const o2 = Math.floor(pL / b) * Math.floor(pW / a);
-    const perLayer = Math.max(o1, o2);
-    const maxByDim = perLayer * layers;
-    const grid = o1 >= o2
-      ? `${Math.floor(pL / a)}×${Math.floor(pW / b)}`
-      : `${Math.floor(pL / b)}×${Math.floor(pW / a)}`;
-    if (!best || maxByDim > best.maxByDim) {
-      best = { perLayer, grid, layers, maxByDim, hcm: upH };
-    }
+  const layers = Math.floor(pH / bH);
+  if (layers < 1) return null;
+  const o1 = Math.floor(pL / bL) * Math.floor(pW / bW);   // standard
+  const o2 = Math.floor(pL / bW) * Math.floor(pW / bL);   // swap L↔W
+  let perLayer, grid;
+  if (rotation === 'standard') {
+    perLayer = o1;
+    grid = `${Math.floor(pL / bL)}×${Math.floor(pW / bW)}`;
+  } else if (rotation === 'rotated') {
+    perLayer = o2;
+    grid = `${Math.floor(pL / bW)}×${Math.floor(pW / bL)}`;
+  } else {
+    // auto: pick whichever fits more boxes
+    perLayer = Math.max(o1, o2);
+    grid = o1 >= o2
+      ? `${Math.floor(pL / bL)}×${Math.floor(pW / bW)}`
+      : `${Math.floor(pL / bW)}×${Math.floor(pW / bL)}`;
   }
-  return best;
+  return { perLayer, grid, layers, maxByDim: perLayer * layers, hcm: bH };
 }
 
-function allocateSkus(skus, pLcm, pWcm, pHcm, maxKg, fallback, divisor) {
+function allocateSkus(skus, pLcm, pWcm, pHcm, maxKg, fallback, divisor, rotation) {
   return skus.map(r => {
-    const fit = calcFit(r.lcm, r.wcm, r.hcm, pLcm, pWcm, pHcm);
+    const fit = calcFit(r.lcm, r.wcm, r.hcm, pLcm, pWcm, pHcm, rotation || 'auto');
     const maxDim = fit ? fit.maxByDim : fallback;
     const maxWt = r.kg > 0 ? Math.floor(maxKg / r.kg) : 9999;
     const eff = Math.max(1, Math.min(maxDim, maxWt));
@@ -36,11 +34,9 @@ function allocateSkus(skus, pLcm, pWcm, pHcm, maxKg, fallback, divisor) {
     const gl = fit ? `${fit.grid} × ${fit.layers}L` : '—';
     const boxVolPerUnit = (r.lcm * r.wcm * r.hcm) / divisor;
     const skuBoxVolWt = r.boxes * boxVolPerUnit;
-    // Use the best-orientation's box height for stacking height calculations
-    const effectiveHcm = fit ? fit.hcm : r.hcm;
-    // dimMax = pure dimension limit (weight-independent); used for shared-space tracking
+    // dimMax = pure dimensional limit (weight-independent) for shared-space tracking on mixed pallets
     const dimMax = fit ? fit.maxByDim : fallback;
-    return { ...r, fit, eff, pallets, reason, gl, boxVolPerUnit, skuBoxVolWt, effectiveHcm, dimMax };
+    return { ...r, fit, eff, pallets, reason, gl, boxVolPerUnit, skuBoxVolWt, dimMax };
   });
 }
 
@@ -54,7 +50,7 @@ function makeItems(alloc) {
       // effectiveHcm = box height in the chosen best orientation
       // dimMax = pure dimensional box limit per pallet (ignores weight)
       items.push({ sku: r.sku, n, cargo: n * r.kg, eff: r.eff, perLayer,
-                   hcm: r.effectiveHcm || r.hcm, dimMax: r.dimMax || r.eff });
+                   hcm: r.hcm, dimMax: r.dimMax || r.eff });
       rem -= n;
     }
   });
