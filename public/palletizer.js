@@ -59,16 +59,24 @@ function canFit(p, item, maxKg) {
   return p.cargo + item.cargo <= maxKg && p.space + item.n / item.eff <= 1.001;
 }
 
-function computeHeights(pallets) {
+function computeHeights(pallets, pHcm) {
   for (const p of pallets) {
+    if (!p.dims.length) continue;
     const minPerLayer = Math.min(...p.dims.map(d => d.perLayer));
     const maxHcm = Math.max(...p.dims.map(d => d.hcm));
-    p.layers = Math.ceil(p.boxes / minPerLayer);
-    p.actualHeightCm = p.layers * maxHcm;
+    // How many layers does the box count need?
+    const neededLayers = Math.ceil(p.boxes / Math.max(1, minPerLayer));
+    // How many layers fit inside this pallet height?
+    const maxFitLayers = (pHcm > 0 && maxHcm > 0) ? Math.floor(pHcm / maxHcm) : neededLayers;
+    p.layers = Math.min(neededLayers, maxFitLayers);
+    // Cap displayed height at the configured pallet height
+    p.actualHeightCm = maxHcm > 0
+      ? Math.min(p.layers * maxHcm, pHcm || p.layers * maxHcm)
+      : 0;
   }
 }
 
-function buildPallets(alloc, maxKg, tare, volPerPallet) {
+function buildPallets(alloc, maxKg, tare, volPerPallet, pHcm) {
   const items = makeItems(alloc);
   const merged = [];
   let cur = null;
@@ -78,11 +86,11 @@ function buildPallets(alloc, maxKg, tare, volPerPallet) {
     else { merged.push(cur); cur = newPallet(it); }
   }
   if (cur && cur.boxes > 0) merged.push(cur);
-  computeHeights(merged);
+  computeHeights(merged, pHcm || 0);
   return formatPallets(merged, tare, volPerPallet);
 }
 
-function buildPalletsMixed(alloc, maxKg, tare, volPerPallet) {
+function buildPalletsMixed(alloc, maxKg, tare, volPerPallet, pHcm) {
   const items = makeItems(alloc);
   items.sort((a, b) => b.cargo - a.cargo);
   const pallets = [];
@@ -93,7 +101,7 @@ function buildPalletsMixed(alloc, maxKg, tare, volPerPallet) {
     }
     if (!placed) pallets.push(newPallet(item));
   }
-  computeHeights(pallets);
+  computeHeights(pallets, pHcm || 0);
   return formatPallets(pallets, tare, volPerPallet);
 }
 

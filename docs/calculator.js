@@ -139,8 +139,8 @@ function fullAnalysis(input) {
 
   const volPerPallet = (pLcm * pWcm * pHcm) / (divisor || 6000);
   const pallets = mixed
-    ? buildPalletsMixed(alloc, maxKg, tare, volPerPallet)
-    : buildPallets(alloc, maxKg, tare, volPerPallet);
+    ? buildPalletsMixed(alloc, maxKg, tare, volPerPallet, pHcm)
+    : buildPallets(alloc, maxKg, tare, volPerPallet, pHcm);
 
   const totPallets = pallets.length;
   const weights = computeWeights(alloc, totPallets, totCargo, config);
