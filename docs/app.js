@@ -1046,15 +1046,18 @@ function renderResults(d) {
     return `<span style="font-size:11px;font-weight:600;color:${pct>99?'#ef4444':pct>79?'#047857':'#475569'}">${pct}%</span>`
       + `<span class="util-bar ${barCls}" style="width:${w*0.4}px"></span>`;
   }
+  function floorAreaPct(p) {
+    const pLcm = config.palletLcm, pWcm = config.palletWcm;
+    if (!p.floorLcm || !p.floorWcm || !pLcm || !pWcm) return 0;
+    return Math.round(p.floorLcm * p.floorWcm / (pLcm * pWcm) * 100);
+  }
   function floorStr(p) {
     if (!p.floorLcm || !p.floorWcm) return '—';
-    const pLcm = config.palletLcm, pWcm = config.palletWcm;
-    const areaUtil = pLcm && pWcm ? Math.round(p.floorLcm * p.floorWcm / (pLcm * pWcm) * 100) : 0;
     if (dimIsIn) {
       const fL = round2(p.floorLcm * CM_TO_IN), fW = round2(p.floorWcm * CM_TO_IN);
-      return `<span class="util-floor">${fL}×${fW}"</span><br><span style="font-size:9px;color:#94a3b8">${areaUtil}% of ${pLin}×${pWin}"</span>`;
+      return `<span class="util-floor">${fL}×${fW}"</span>`;
     }
-    return `<span class="util-floor">${p.floorLcm}×${p.floorWcm}cm</span><br><span style="font-size:9px;color:#94a3b8">${areaUtil}% of ${Math.round(pLcm)}×${Math.round(pWcm)}cm</span>`;
+    return `<span class="util-floor">${p.floorLcm}×${p.floorWcm}cm</span>`;
   }
 
   $('palletBody').innerHTML = [
@@ -1074,12 +1077,14 @@ function renderResults(d) {
       <td>${fmtN(p.vol)}</td><td><b>${fmtN(p.charge)}</b></td>
       <td class="util-col" style="display:none;white-space:nowrap">${utilBar(p.weightUtil,'util-wt')}</td>
       <td class="util-col" style="display:none;white-space:nowrap">${utilBar(p.dimUtil,'util-dim')}</td>
+      <td class="util-col" style="display:none;white-space:nowrap">${utilBar(floorAreaPct(p),'util-dim')}</td>
       <td class="util-col" style="display:none">${floorStr(p)}</td>
     </tr>`;
     }),
     `<tr class="tr"><td colspan="2"><b>Total (${pallets.length} pallets)${mixNote}</b></td>
       <td><b>${tB}</b></td><td>—</td><td><b>${fmtN(tC)}</b></td><td>—</td>
       <td><b>${fmtN(tW)}</b></td><td><b>${fmtN(tLb, 1)}</b></td><td>—</td><td>—</td>
+      <td class="util-col" style="display:none"></td>
       <td class="util-col" style="display:none"></td>
       <td class="util-col" style="display:none"></td>
       <td class="util-col" style="display:none"></td></tr>`
