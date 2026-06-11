@@ -69,6 +69,12 @@
       </select>
     </label>
   </div>
+  <div class="fg one" style="margin-bottom:2px">
+    <label class="chk-label">
+      <input type="checkbox" id="showUtilization"/>
+      Show utilization % &amp; actual floor size per pallet
+    </label>
+  </div>
   <div class="fg three">
     <label id="pL_lbl">L (in)<input id="pL" type="number" value="48" min="1" step="0.1"/></label>
     <label id="pW_lbl">W (in)<input id="pW" type="number" value="40" min="1" step="0.1"/></label>
@@ -388,6 +394,9 @@
       <table class="ptbl"><thead><tr>
         <th>Pallet</th><th>Dims (in)</th><th>Boxes</th><th>SKU mix</th><th>Cargo kg</th>
         <th>+Tare kg</th><th>Total kg</th><th>Total lbs</th><th>Vol kg</th><th>Chargeable kg</th>
+        <th class="util-col" style="display:none">Wt util</th>
+        <th class="util-col" style="display:none">Box util</th>
+        <th class="util-col" style="display:none">Floor used</th>
       </tr></thead><tbody id="palletBody"></tbody></table>
     </div>
   </div>

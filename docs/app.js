@@ -873,6 +873,13 @@ function runCalculation() {
   }
 }
 
+function applyUtilColumns() {
+  const show = $('showUtilization')?.checked;
+  document.querySelectorAll('.util-col').forEach(el => {
+    el.style.display = show ? '' : 'none';
+  });
+}
+
 function renderResults(d) {
   lastAnalysisData = d;
   const { summary, weights, hubCosts, cfsCosts, breakEven, sensitivity, recommendation, pallets, allocation, perUnit, config } = d;
@@ -1032,6 +1039,24 @@ function renderResults(d) {
   pallets.forEach(p => { tB += p.boxes; tC += p.cargo; tW += p.total; tLb += p.lbs; });
   const mixNote = isMixed && d.separatePallets > pallets.length
     ? ` <span style="font-size:10px;color:var(--green);font-weight:500">(saved ${d.separatePallets - pallets.length} pallets vs separate)</span>` : '';
+
+  function utilBar(pct, cls) {
+    const w = Math.min(pct, 100);
+    const barCls = pct > 99 ? 'util-over' : cls;
+    return `<span style="font-size:11px;font-weight:600;color:${pct>99?'#ef4444':pct>79?'#047857':'#475569'}">${pct}%</span>`
+      + `<span class="util-bar ${barCls}" style="width:${w*0.4}px"></span>`;
+  }
+  function floorStr(p) {
+    if (!p.floorLcm || !p.floorWcm) return '—';
+    const pLcm = config.palletLcm, pWcm = config.palletWcm;
+    const areaUtil = pLcm && pWcm ? Math.round(p.floorLcm * p.floorWcm / (pLcm * pWcm) * 100) : 0;
+    if (dimIsIn) {
+      const fL = round2(p.floorLcm * CM_TO_IN), fW = round2(p.floorWcm * CM_TO_IN);
+      return `<span class="util-floor">${fL}×${fW}"</span><br><span style="font-size:9px;color:#94a3b8">${areaUtil}% of ${pLin}×${pWin}"</span>`;
+    }
+    return `<span class="util-floor">${p.floorLcm}×${p.floorWcm}cm</span><br><span style="font-size:9px;color:#94a3b8">${areaUtil}% of ${Math.round(pLcm)}×${Math.round(pWcm)}cm</span>`;
+  }
+
   $('palletBody').innerHTML = [
     ...pallets.map(p => {
       const actH = p.actualHeightCm > 0
@@ -1047,12 +1072,19 @@ function renderResults(d) {
       <td>${p.boxes}</td>${skuTd}<td>${fmtN(p.cargo)}</td><td>+${config.tare}</td>
       <td><b>${fmtN(p.total)}</b></td><td><b>${fmtN(p.lbs, 1)}</b></td>
       <td>${fmtN(p.vol)}</td><td><b>${fmtN(p.charge)}</b></td>
+      <td class="util-col" style="display:none;white-space:nowrap">${utilBar(p.weightUtil,'util-wt')}</td>
+      <td class="util-col" style="display:none;white-space:nowrap">${utilBar(p.dimUtil,'util-dim')}</td>
+      <td class="util-col" style="display:none">${floorStr(p)}</td>
     </tr>`;
     }),
     `<tr class="tr"><td colspan="2"><b>Total (${pallets.length} pallets)${mixNote}</b></td>
       <td><b>${tB}</b></td><td>—</td><td><b>${fmtN(tC)}</b></td><td>—</td>
-      <td><b>${fmtN(tW)}</b></td><td><b>${fmtN(tLb, 1)}</b></td><td>—</td><td>—</td></tr>`
+      <td><b>${fmtN(tW)}</b></td><td><b>${fmtN(tLb, 1)}</b></td><td>—</td><td>—</td>
+      <td class="util-col" style="display:none"></td>
+      <td class="util-col" style="display:none"></td>
+      <td class="util-col" style="display:none"></td></tr>`
   ].join('');
+  applyUtilColumns();
 
   // ─── ALLOCATION ───
   $('allocBody').innerHTML = allocation.map(r => `<tr>
@@ -1236,6 +1268,10 @@ function attachSidebarListeners() {
     const el = $(id);
     if (el) el.addEventListener('change', autoCalc);
   });
+
+  // Utilization toggle — show/hide columns instantly, no recalc needed
+  const utilCb = $('showUtilization');
+  if (utilCb) utilCb.addEventListener('change', applyUtilColumns);
 
   // Dimension unit toggle — convert values + recalc
   let prevDimUnit = getDimUnit();

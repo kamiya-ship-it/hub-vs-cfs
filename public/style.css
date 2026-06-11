@@ -87,6 +87,14 @@ td input:focus{outline:none;background:#f8fafc!important;border-radius:4px}
 .win-badge.hub{background:#1d4ed8;color:#ffffff}
 .win-badge.cfs{background:#b45309;color:#ffffff}
 
+/* Checkbox label in sidebar */
+.chk-label{flex-direction:row!important;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#475569}
+.chk-label input[type=checkbox]{width:auto;margin:0;cursor:pointer}
+/* Utilization bar cells */
+.util-bar{display:inline-block;height:6px;border-radius:3px;vertical-align:middle;margin-left:4px}
+.util-wt{background:#3b82f6}.util-dim{background:#f59e0b}.util-over{background:#ef4444}
+.util-floor{font-size:10px;color:#047857;font-weight:500}
+
 /* Recommendation */
 .rec{padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:14px;text-align:center}
 .rec.hub{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
