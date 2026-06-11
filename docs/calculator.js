@@ -166,6 +166,6 @@ function fullAnalysis(input) {
     pallets, allocation: alloc, perUnit,
     palletMode: mixed ? 'mixed' : 'separate',
     separatePallets,
-    config: { palletL, palletW, palletH, tare, hubTat: hubTat || 8, cfsTat: cfsTat || 36 },
+    config: { palletL, palletW, palletH, palletLcm: pLcm, palletWcm: pWcm, palletHcm: pHcm, tare, hubTat: hubTat || 8, cfsTat: cfsTat || 36 },
   };
 }
