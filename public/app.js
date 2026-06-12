@@ -967,8 +967,21 @@ function buildPalletVizHTML(p, alloc, cfg, dimIsIn) {
   const boardLines = [1,2,3,4].map(i =>
     `<line x1="${fox.toFixed(1)}" y1="${(foy + i*fxW/5).toFixed(1)}" x2="${(fox+fxL).toFixed(1)}" y2="${(foy+i*fxW/5).toFixed(1)}" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/>`
   ).join('');
-  const usedRect = p.floorLcm && p.floorWcm
-    ? `<rect x="${fox.toFixed(1)}" y="${foy.toFixed(1)}" width="${(p.floorLcm*fscale).toFixed(1)}" height="${(p.floorWcm*fscale).toFixed(1)}" fill="none" stroke="#1e40af" stroke-width="1.5" stroke-dasharray="4,2" rx="2" opacity="0.7"/>` : '';
+  const usedLpx = p.floorLcm ? p.floorLcm * fscale : 0;
+  const usedWpx = p.floorWcm ? p.floorWcm * fscale : 0;
+  const usedRect = p.floorLcm && p.floorWcm ? `
+    <rect x="${fox.toFixed(1)}" y="${foy.toFixed(1)}" width="${usedLpx.toFixed(1)}" height="${usedWpx.toFixed(1)}" fill="none" stroke="#1e40af" stroke-width="1.5" stroke-dasharray="4,2" rx="2" opacity="0.7"/>
+    <!-- L used dimension line above used rect -->
+    <line x1="${fox.toFixed(1)}" y1="${(foy-5).toFixed(1)}" x2="${(fox+usedLpx).toFixed(1)}" y2="${(foy-5).toFixed(1)}" stroke="#1e40af" stroke-width="1.2" opacity="0.8"/>
+    <line x1="${fox.toFixed(1)}" y1="${(foy-8).toFixed(1)}" x2="${fox.toFixed(1)}" y2="${(foy-2).toFixed(1)}" stroke="#1e40af" stroke-width="1.2" opacity="0.8"/>
+    <line x1="${(fox+usedLpx).toFixed(1)}" y1="${(foy-8).toFixed(1)}" x2="${(fox+usedLpx).toFixed(1)}" y2="${(foy-2).toFixed(1)}" stroke="#1e40af" stroke-width="1.2" opacity="0.8"/>
+    <text x="${(fox+usedLpx/2).toFixed(1)}" y="${(foy-9).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="700" fill="#1e40af">${dim(p.floorLcm)}</text>
+    <!-- W used dimension line right of used rect -->
+    <line x1="${(fox+usedLpx+5).toFixed(1)}" y1="${foy.toFixed(1)}" x2="${(fox+usedLpx+5).toFixed(1)}" y2="${(foy+usedWpx).toFixed(1)}" stroke="#10b981" stroke-width="1.2" opacity="0.8"/>
+    <line x1="${(fox+usedLpx+2).toFixed(1)}" y1="${foy.toFixed(1)}" x2="${(fox+usedLpx+8).toFixed(1)}" y2="${foy.toFixed(1)}" stroke="#10b981" stroke-width="1.2" opacity="0.8"/>
+    <line x1="${(fox+usedLpx+2).toFixed(1)}" y1="${(foy+usedWpx).toFixed(1)}" x2="${(fox+usedLpx+8).toFixed(1)}" y2="${(foy+usedWpx).toFixed(1)}" stroke="#10b981" stroke-width="1.2" opacity="0.8"/>
+    <text x="${(fox+usedLpx+14).toFixed(1)}" y="${(foy+usedWpx/2).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="700" fill="#10b981" transform="rotate(90,${(fox+usedLpx+14).toFixed(1)},${(foy+usedWpx/2).toFixed(1)})">${dim(p.floorWcm)}</text>
+  ` : '';
 
   const floorSVG = `<svg width="${FW}" height="${FH}" xmlns="http://www.w3.org/2000/svg" style="border-radius:8px;background:#f8fafc;display:block">
     <defs><clipPath id="${clipId}"><rect x="${fox.toFixed(1)}" y="${foy.toFixed(1)}" width="${fxL.toFixed(1)}" height="${fxW.toFixed(1)}"/></clipPath></defs>
@@ -983,11 +996,11 @@ function buildPalletVizHTML(p, alloc, cfg, dimIsIn) {
   </svg>`;
 
   // ─── SIDE ELEVATION SVG ───
-  const SW = 190, SH = 290, SM = 28, tarePx = 12;
-  const sclH = (SH - 2*SM - tarePx - 20) / pH;
+  const SW = 190, SH = 330, SM = 28, tarePx = 12;
+  const sclH = (SH - 2*SM - tarePx - 80) / pH;  // 80px reserved for L/W bars at bottom
   const ssl = Math.min(130, SW - 2*SM);
   const sox = (SW - ssl) / 2;
-  const baseY = SH - SM - 14;
+  const baseY = SH - SM - 70;  // leave room for L+W bars
 
   let sideRows = [], curSideY = baseY - tarePx;
   for (const [sku] of Object.entries(p.skuMap)) {
@@ -1016,7 +1029,18 @@ function buildPalletVizHTML(p, alloc, cfg, dimIsIn) {
     ${[0,0.44,0.88].map(pos=>`<rect x="${(sox+pos*(ssl-9)).toFixed(1)}" y="${baseY.toFixed(1)}" width="9" height="10" fill="#78350f" rx="1"/>`).join('')}
     ${actHpx > 2 ? `<line x1="${(sox-10).toFixed(1)}" y1="${(baseY-tarePx).toFixed(1)}" x2="${(sox-10).toFixed(1)}" y2="${(baseY-tarePx-actHpx).toFixed(1)}" stroke="#94a3b8" stroke-width="1.5"/>
     <text x="${(sox-22).toFixed(1)}" y="${(baseY-tarePx-actHpx/2).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#475569" transform="rotate(-90,${(sox-22).toFixed(1)},${(baseY-tarePx-actHpx/2).toFixed(1)})">${dim(p.actualHeightCm)}</text>` : ''}
-    <text x="${(sox+ssl/2).toFixed(1)}" y="${(SH-4).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#475569">${dim(pL)} L</text>
+    <!-- L utilization bar -->
+    <text x="${sox.toFixed(1)}" y="${(baseY+20).toFixed(1)}" font-family="system-ui,sans-serif" font-size="8" font-weight="700" fill="#64748b">L</text>
+    <rect x="${(sox+12).toFixed(1)}" y="${(baseY+12).toFixed(1)}" width="${(ssl-12).toFixed(1)}" height="6" fill="#e2e8f0" rx="3"/>
+    <rect x="${(sox+12).toFixed(1)}" y="${(baseY+12).toFixed(1)}" width="${(Math.min(ssl-12, (p.floorLcm||0)/pL*(ssl-12))).toFixed(1)}" height="6" fill="#3b82f6" rx="3"/>
+    <text x="${(sox+12).toFixed(1)}" y="${(baseY+30).toFixed(1)}" font-family="system-ui,sans-serif" font-size="8" font-weight="600" fill="#3b82f6">${dim(p.floorLcm||0)} used</text>
+    <text x="${(sox+ssl).toFixed(1)}" y="${(baseY+30).toFixed(1)}" text-anchor="end" font-family="system-ui,sans-serif" font-size="8" fill="#94a3b8">/ ${dim(pL)}</text>
+    <!-- W utilization bar -->
+    <text x="${sox.toFixed(1)}" y="${(baseY+46).toFixed(1)}" font-family="system-ui,sans-serif" font-size="8" font-weight="700" fill="#64748b">W</text>
+    <rect x="${(sox+12).toFixed(1)}" y="${(baseY+38).toFixed(1)}" width="${(ssl-12).toFixed(1)}" height="6" fill="#e2e8f0" rx="3"/>
+    <rect x="${(sox+12).toFixed(1)}" y="${(baseY+38).toFixed(1)}" width="${(Math.min(ssl-12, (p.floorWcm||0)/pW*(ssl-12))).toFixed(1)}" height="6" fill="#10b981" rx="3"/>
+    <text x="${(sox+12).toFixed(1)}" y="${(baseY+56).toFixed(1)}" font-family="system-ui,sans-serif" font-size="8" font-weight="600" fill="#10b981">${dim(p.floorWcm||0)} used</text>
+    <text x="${(sox+ssl).toFixed(1)}" y="${(baseY+56).toFixed(1)}" text-anchor="end" font-family="system-ui,sans-serif" font-size="8" fill="#94a3b8">/ ${dim(pW)}</text>
   </svg>`;
 
   // ─── LEGEND & STATS ───
