@@ -1,24 +1,39 @@
-// rotation: 'auto' (best L×W), 'standard' (as entered), 'rotated' (swap L↔W)
-// H is always vertical — boxes stay upright.
+// rotation: 'auto' (best L×W, H vertical), 'standard', 'rotated' (swap L↔W, H vertical)
+//           'best' — tries all 3 principal orientations (incl. tipping) and picks max boxes
 function calcFit(bL, bW, bH, pL, pW, pH, rotation) {
   if (!bL || !bW || !bH) return null;
-  const layers = Math.floor(pH / bH);
-  if (layers < 1) return null;
-  const r1s = Math.floor(pL / bL), r2s = Math.floor(pW / bW); // standard
-  const r1r = Math.floor(pL / bW), r2r = Math.floor(pW / bL); // rotated L↔W
-  const o1 = r1s * r2s, o2 = r1r * r2r;
-  const useRotated = rotation === 'rotated' || (rotation !== 'standard' && o2 > o1);
-  const r1 = useRotated ? r1r : r1s;
-  const r2 = useRotated ? r2r : r2s;
-  const perLayer = r1 * r2;
-  const boxAlongL = useRotated ? bW : bL;
-  const boxAlongW = useRotated ? bL : bW;
-  return {
-    perLayer, grid: `${r1}×${r2}`, layers,
-    maxByDim: perLayer * layers, hcm: bH,
-    floorLcm: r1 * boxAlongL,   // actual cm consumed along pallet L
-    floorWcm: r2 * boxAlongW,   // actual cm consumed along pallet W
-  };
+
+  // Core: given floor dims fL×fW and vertical fH, return best fit (auto picks best L↔W)
+  function tryOrientation(fL, fW, fH, forceAuto) {
+    const layers = Math.floor(pH / fH);
+    if (layers < 1) return null;
+    const r1s = Math.floor(pL / fL), r2s = Math.floor(pW / fW);
+    const r1r = Math.floor(pL / fW), r2r = Math.floor(pW / fL);
+    const o1 = r1s * r2s, o2 = r1r * r2r;
+    const useRot = forceAuto ? o2 > o1
+      : rotation === 'rotated' || (rotation !== 'standard' && o2 > o1);
+    const r1 = useRot ? r1r : r1s;
+    const r2 = useRot ? r2r : r2s;
+    if (r1 * r2 < 1) return null;
+    const bpL = useRot ? fW : fL, bpW = useRot ? fL : fW;
+    return {
+      perLayer: r1 * r2, grid: `${r1}×${r2}`, layers,
+      maxByDim: r1 * r2 * layers, hcm: fH,
+      floorLcm: r1 * bpL, floorWcm: r2 * bpW,
+    };
+  }
+
+  if (rotation === 'best') {
+    // Try all 3 principal orientations (which dimension is vertical), pick most boxes
+    const candidates = [
+      tryOrientation(bL, bW, bH, true),  // upright (H vertical)
+      tryOrientation(bL, bH, bW, true),  // tipped: W vertical
+      tryOrientation(bW, bH, bL, true),  // tipped: L vertical
+    ].filter(Boolean);
+    return candidates.sort((a, b) => b.maxByDim - a.maxByDim)[0] || null;
+  }
+
+  return tryOrientation(bL, bW, bH, false);
 }
 
 function allocateSkus(skus, pLcm, pWcm, pHcm, maxKg, fallback, divisor, rotation) {
@@ -48,7 +63,8 @@ function makeItems(alloc) {
       const n = Math.min(rem, r.eff);
       items.push({
         sku: r.sku, n, cargo: n * r.kg, eff: r.eff, perLayer,
-        hcm: r.hcm, dimMax: r.dimMax || r.eff,
+        hcm: r.fit ? r.fit.hcm : r.hcm,  // use actual vertical dim (may differ when tipped)
+        dimMax: r.dimMax || r.eff,
         floorLcm: r.floorLcm || 0, floorWcm: r.floorWcm || 0,
       });
       rem -= n;
