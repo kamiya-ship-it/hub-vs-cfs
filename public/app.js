@@ -18,6 +18,7 @@ function fc(inr) {
 // ─── LAST ANALYSIS + ROUTE STATE ───
 let lastAnalysisData = null;
 let selectedRoute = 'hub';
+let palletVizData = null;
 
 function selectRoute(r) {
   selectedRoute = r;
@@ -873,6 +874,193 @@ function runCalculation() {
   }
 }
 
+// ─── PALLET VISUALIZATION ───
+const VIZ_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+
+function showPalletViz(n) {
+  if (!palletVizData) return;
+  const { pallets, allocation, config } = palletVizData;
+  const total = pallets.length;
+  let idx = n - 1;
+
+  let modal = document.getElementById('pvModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'pvModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.78);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    modal.innerHTML = `<div id="pvCard" style="background:#fff;border-radius:16px;padding:24px;max-width:960px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 25px 60px rgba(0,0,0,0.45)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+        <button id="pvPrev" style="border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px">‹</button>
+        <div id="pvTitle" style="font-size:16px;font-weight:700;flex:1;text-align:center;color:#1e293b"></div>
+        <button id="pvNext" style="border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px">›</button>
+        <button id="pvClose" style="margin-left:4px;border:none;background:#f1f5f9;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:20px;color:#64748b">×</button>
+      </div>
+      <div id="pvContent"></div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+    document.getElementById('pvClose').addEventListener('click', () => { modal.style.display = 'none'; });
+  }
+
+  function show(i) {
+    idx = ((i % total) + total) % total;
+    const p = pallets[idx];
+    const dimIsIn = $('dimUnit')?.value !== 'cm';
+    document.getElementById('pvTitle').textContent = `Pallet ${p.n} of ${total}  ·  ${p.boxes} boxes  ·  ${p.cargo.toFixed(1)} kg cargo`;
+    document.getElementById('pvContent').innerHTML = buildPalletVizHTML(p, allocation, config, dimIsIn);
+    document.getElementById('pvPrev').onclick = () => show(idx - 1);
+    document.getElementById('pvNext').onclick = () => show(idx + 1);
+    modal.style.display = 'flex';
+  }
+  show(idx);
+}
+
+function buildPalletVizHTML(p, alloc, cfg, dimIsIn) {
+  const dim = cm => dimIsIn ? `${(cm * 0.3937).toFixed(1)}"` : `${Math.round(cm)}cm`;
+  const { palletLcm: pL, palletWcm: pW, palletHcm: pH } = cfg;
+  const skuColorMap = {};
+  alloc.forEach((r, i) => { skuColorMap[r.sku] = VIZ_COLORS[i % VIZ_COLORS.length]; });
+
+  // ─── FLOOR PLAN SVG (top-down) ───
+  const FW = 380, FH = 300, FM = 32;
+  const fscale = Math.min((FW - 2*FM) / pL, (FH - 2*FM) / pW);
+  const fxL = pL * fscale, fxW = pW * fscale;
+  const fox = FM + ((FW - 2*FM) - fxL) / 2;
+  const foy = FM + ((FH - 2*FM) - fxW) / 2;
+  const clipId = `pc${p.n}_${Date.now()}`;
+
+  let floorBoxes = [], curOffX = 0;
+  const skuItems = [];
+
+  for (const [sku, count] of Object.entries(p.skuMap)) {
+    const r = alloc.find(a => a.sku === sku);
+    const color = skuColorMap[sku] || '#94a3b8';
+    if (!r?.fit) { skuItems.push({ sku, count, color, grid: '?', layers: '?' }); continue; }
+    const [r1, r2] = r.fit.grid.split('×').map(Number);
+    const bpL = (r.fit.floorLcm / r1) * fscale;
+    const bpW = (r.fit.floorWcm / r2) * fscale;
+    // Divider line between SKU sections on mixed pallets
+    if (curOffX > 0) {
+      const lx = (fox + curOffX).toFixed(1);
+      floorBoxes.push(`<line x1="${lx}" y1="${foy.toFixed(1)}" x2="${lx}" y2="${(foy+fxW).toFixed(1)}" stroke="#475569" stroke-width="1" stroke-dasharray="3,2" opacity="0.5"/>`);
+    }
+    let drawn = 0;
+    loop: for (let ly = 0; ly < r.fit.layers; ly++) {
+      for (let i = 0; i < r1; i++) {
+        for (let j = 0; j < r2; j++) {
+          if (drawn >= count) break loop;
+          if (ly === 0) {
+            const x = (fox + curOffX + i * bpL).toFixed(1);
+            const y = (foy + j * bpW).toFixed(1);
+            const w = Math.max(1, bpL - 1.5).toFixed(1);
+            const h = Math.max(1, bpW - 1.5).toFixed(1);
+            floorBoxes.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" opacity="0.82" stroke="rgba(255,255,255,0.9)" stroke-width="0.8" rx="1.5"/>`);
+          }
+          drawn++;
+        }
+      }
+    }
+    curOffX += r1 * bpL;
+    skuItems.push({ sku, count, color, grid: r.fit.grid, layers: r.fit.layers, bL: r.lcm, bW: r.wcm, bH: r.hcm });
+  }
+
+  const boardLines = [1,2,3,4].map(i =>
+    `<line x1="${fox.toFixed(1)}" y1="${(foy + i*fxW/5).toFixed(1)}" x2="${(fox+fxL).toFixed(1)}" y2="${(foy+i*fxW/5).toFixed(1)}" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/>`
+  ).join('');
+  const usedRect = p.floorLcm && p.floorWcm
+    ? `<rect x="${fox.toFixed(1)}" y="${foy.toFixed(1)}" width="${(p.floorLcm*fscale).toFixed(1)}" height="${(p.floorWcm*fscale).toFixed(1)}" fill="none" stroke="#1e40af" stroke-width="1.5" stroke-dasharray="4,2" rx="2" opacity="0.7"/>` : '';
+
+  const floorSVG = `<svg width="${FW}" height="${FH}" xmlns="http://www.w3.org/2000/svg" style="border-radius:8px;background:#f8fafc;display:block">
+    <defs><clipPath id="${clipId}"><rect x="${fox.toFixed(1)}" y="${foy.toFixed(1)}" width="${fxL.toFixed(1)}" height="${fxW.toFixed(1)}"/></clipPath></defs>
+    <text x="${(FW/2).toFixed(1)}" y="16" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" letter-spacing="1">TOP VIEW</text>
+    <rect x="${fox.toFixed(1)}" y="${foy.toFixed(1)}" width="${fxL.toFixed(1)}" height="${fxW.toFixed(1)}" fill="#fef9c3" rx="3"/>
+    ${boardLines}
+    <g clip-path="url(#${clipId})">${floorBoxes.join('')}</g>
+    <rect x="${fox.toFixed(1)}" y="${foy.toFixed(1)}" width="${fxL.toFixed(1)}" height="${fxW.toFixed(1)}" fill="none" stroke="#d97706" stroke-width="2" rx="3"/>
+    ${usedRect}
+    <text x="${(fox+fxL/2).toFixed(1)}" y="${(foy+fxW+18).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569">${dim(pL)} L</text>
+    <text x="${(fox-16).toFixed(1)}" y="${(foy+fxW/2).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#475569" transform="rotate(-90,${(fox-16).toFixed(1)},${(foy+fxW/2).toFixed(1)})">${dim(pW)} W</text>
+  </svg>`;
+
+  // ─── SIDE ELEVATION SVG ───
+  const SW = 190, SH = 290, SM = 28, tarePx = 12;
+  const sclH = (SH - 2*SM - tarePx - 20) / pH;
+  const ssl = Math.min(130, SW - 2*SM);
+  const sox = (SW - ssl) / 2;
+  const baseY = SH - SM - 14;
+
+  let sideRows = [], curSideY = baseY - tarePx;
+  for (const [sku] of Object.entries(p.skuMap)) {
+    const r = alloc.find(a => a.sku === sku);
+    if (!r) continue;
+    const color = skuColorMap[sku] || '#94a3b8';
+    const layers = r.fit?.layers || 1;
+    const hpx = Math.max(6, r.hcm * sclH);
+    for (let ly = 0; ly < layers; ly++) {
+      const y = curSideY - (ly + 1) * hpx;
+      if (y < SM) break;
+      sideRows.push(`<rect x="${sox.toFixed(1)}" y="${y.toFixed(1)}" width="${ssl.toFixed(1)}" height="${(hpx-1).toFixed(1)}" fill="${color}" opacity="${ly%2===0?0.82:0.62}" stroke="rgba(255,255,255,0.6)" stroke-width="0.6" rx="1.5"/>`);
+      sideRows.push(`<text x="${(sox+ssl/2).toFixed(1)}" y="${(y+hpx/2+3.5).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" fill="white" font-weight="600">L${ly+1}</text>`);
+    }
+    curSideY -= layers * hpx;
+  }
+
+  const actHpx = (p.actualHeightCm || 0) * sclH;
+  const maxHpx = pH * sclH;
+  const sideSVG = `<svg width="${SW}" height="${SH}" xmlns="http://www.w3.org/2000/svg" style="border-radius:8px;background:#f8fafc;display:block">
+    <text x="${(SW/2).toFixed(1)}" y="16" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" font-weight="700" fill="#94a3b8" letter-spacing="1">SIDE VIEW</text>
+    <line x1="${sox.toFixed(1)}" y1="${(baseY-tarePx-maxHpx).toFixed(1)}" x2="${(sox+ssl).toFixed(1)}" y2="${(baseY-tarePx-maxHpx).toFixed(1)}" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="3,2"/>
+    <text x="${(sox+ssl+4).toFixed(1)}" y="${(baseY-tarePx-maxHpx+4).toFixed(1)}" font-family="system-ui,sans-serif" font-size="8" fill="#f59e0b">max H</text>
+    ${sideRows.join('')}
+    <rect x="${sox.toFixed(1)}" y="${(baseY-tarePx).toFixed(1)}" width="${ssl.toFixed(1)}" height="${tarePx}" fill="#92400e" rx="2"/>
+    ${[0,0.44,0.88].map(pos=>`<rect x="${(sox+pos*(ssl-9)).toFixed(1)}" y="${baseY.toFixed(1)}" width="9" height="10" fill="#78350f" rx="1"/>`).join('')}
+    ${actHpx > 2 ? `<line x1="${(sox-10).toFixed(1)}" y1="${(baseY-tarePx).toFixed(1)}" x2="${(sox-10).toFixed(1)}" y2="${(baseY-tarePx-actHpx).toFixed(1)}" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="${(sox-22).toFixed(1)}" y="${(baseY-tarePx-actHpx/2).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#475569" transform="rotate(-90,${(sox-22).toFixed(1)},${(baseY-tarePx-actHpx/2).toFixed(1)})">${dim(p.actualHeightCm)}</text>` : ''}
+    <text x="${(sox+ssl/2).toFixed(1)}" y="${(SH-4).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#475569">${dim(pL)} L</text>
+  </svg>`;
+
+  // ─── LEGEND & STATS ───
+  const legendHTML = skuItems.map(s => `
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:8px;background:#f8fafc;margin-bottom:5px">
+      <div style="width:12px;height:12px;border-radius:3px;background:${s.color};margin-top:2px;flex-shrink:0"></div>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12px;font-weight:600;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.sku)}">${esc(s.sku)}</div>
+        <div style="font-size:10px;color:#64748b">${s.count} boxes · ${s.grid} grid · ${s.layers}L</div>
+        ${s.bL ? `<div style="font-size:10px;color:#94a3b8">${dim(s.bL)} × ${dim(s.bW)} × ${dim(s.bH)}</div>` : ''}
+      </div>
+    </div>`).join('');
+
+  const areaUtil = pL && pW && p.floorLcm && p.floorWcm ? Math.round(p.floorLcm * p.floorWcm / (pL * pW) * 100) : 0;
+  const statRows = [
+    ['Weight util', p.weightUtil + '%', '#0369a1'],
+    ['Box fill', p.dimUtil + '%', '#059669'],
+    ['Floor area', areaUtil + '%', '#7c3aed'],
+    ['Stack height', dim(p.actualHeightCm || 0), '#d97706'],
+  ];
+
+  const statsHTML = `<div style="margin-top:10px;padding:10px;background:#f0f9ff;border-radius:8px;border:1px solid #bae6fd">
+    <div style="font-size:10px;font-weight:700;color:#0369a1;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Utilization</div>
+    ${statRows.map(([lbl,val,clr])=>`<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:#64748b">${lbl}</span><span style="font-weight:700;color:${clr}">${val}</span></div>`).join('')}
+  </div>`;
+
+  const mixedNote = p.skuCount > 1 ? `<div style="font-size:10px;color:#94a3b8;margin-top:6px;font-style:italic">Mixed pallet: sections shown side-by-side (approximate layout)</div>` : '';
+
+  return `<div style="display:grid;grid-template-columns:auto auto 1fr;gap:20px;align-items:start">
+    <div>
+      <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Floor Plan</div>
+      ${floorSVG}${mixedNote}
+    </div>
+    <div>
+      <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Side Elevation</div>
+      ${sideSVG}
+    </div>
+    <div style="min-width:170px">
+      <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">SKU Breakdown</div>
+      ${legendHTML}${statsHTML}
+    </div>
+  </div>`;
+}
+
 function applyUtilColumns() {
   const show = $('showUtilization')?.checked;
   document.querySelectorAll('.util-col').forEach(el => {
@@ -882,6 +1070,7 @@ function applyUtilColumns() {
 
 function renderResults(d) {
   lastAnalysisData = d;
+  palletVizData = { pallets: d.pallets, allocation: d.allocation, config: d.config };
   const { summary, weights, hubCosts, cfsCosts, breakEven, sensitivity, recommendation, pallets, allocation, perUnit, config } = d;
   const airFreight = gv('airFreight');
   const usdRate = gv('usdRate') || 93.88;
@@ -1070,8 +1259,8 @@ function renderResults(d) {
       const skuTd = p.skuCount > 1
         ? `<td style="font-size:9px;color:var(--text2);max-width:160px;white-space:normal;line-height:1.3">${esc(p.skuMix)}</td>`
         : `<td style="font-size:9px;color:var(--text3)">${esc(p.skuMix)}</td>`;
-      return `<tr>
-      <td><b>Pallet ${p.n}</b></td><td>${dimStr}${layerNote}</td>
+      return `<tr onclick="showPalletViz(${p.n})" style="cursor:pointer" title="Click to visualize pallet layout">
+      <td><b>Pallet ${p.n}</b> <span style="font-size:9px;color:#3b82f6;vertical-align:middle">⊞</span></td><td>${dimStr}${layerNote}</td>
       <td>${p.boxes}</td>${skuTd}<td>${fmtN(p.cargo)}</td><td>+${config.tare}</td>
       <td><b>${fmtN(p.total)}</b></td><td><b>${fmtN(p.lbs, 1)}</b></td>
       <td>${fmtN(p.vol)}</td><td><b>${fmtN(p.charge)}</b></td>

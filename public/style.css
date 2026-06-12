@@ -166,6 +166,7 @@ td input:focus{outline:none;background:#f8fafc!important;border-radius:4px}
 /* Pallet table */
 .ptbl th,.ptbl td{font-size:10px;padding:4px 6px}
 .ptbl .tr td{font-weight:600;background:#f8fafc;border-top:2px solid #cbd5e1}
+#palletBody tr:hover{background:#eff6ff}
 
 /* Qualitative */
 .qual-tbl th,.qual-tbl td{font-size:11px;padding:7px 10px;color:#0f172a}
